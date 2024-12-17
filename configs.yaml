@@ -1,0 +1,113 @@
+#...General experiment parameters
+experiment:
+  run_name: aoj_generation_CMB_final
+  workdir: /Users/dario/Dropbox/PROJECTS/ML/CMB/results/runs/aoj
+
+#...Data parameters
+
+data:
+  target:
+    name: AspenOpenJets
+    path:
+      - /Users/dario/Dropbox/PROJECTS/ML/JetData/AspenOpenJets/data/2016H_job1.h5
+    params:
+      min_num_particles: 0
+      max_num_particles: 128
+      num_jets: 100_000
+
+  source: 
+    name: GaussNoise
+    path: null
+    params:
+      scale: 1.0
+      min_num_particles: 0
+      max_num_particles: 128
+
+  dim:
+    features_continuous: 3             # pt_rel, eta_rel, phi_phi
+    context_continuous: 0
+    features_discrete: 1               # num of transition rates
+    context_discrete: 0      
+  
+  vocab_size: 
+      features: 8 
+      context: 0  
+
+  preprocess:
+    continuous: standardize
+    discrete: states
+    
+#...Model parameters
+
+model: 
+  name: HybridEPiC
+  num_blocks: 10
+  dim:
+    emb_time: 16
+    emb_features_continuous: 16
+    emb_features_discrete: 6
+    emb_context_continuous: 0
+    emb_context_discrete: 0
+    hidden_local: 128
+    hidden_glob: 16
+
+  embedding:
+    time: SinusoidalPositionalEncoding
+    features_continuous: Linear
+    features_discrete: Embedding
+    context_continuous: null
+    context_discrete: null
+
+  skip_connection: true
+  dropout: 0.1
+  activation: SELU
+  add_discrete_head: true
+
+#...Dynamics parameters
+
+dynamics: 
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+  params:
+    sigma: 0.0001
+    gamma: 0.125
+
+#...Pipeline generation parameters
+
+pipeline:
+  method: EulerLeapingSolver
+  num_timesteps: 1000
+  time_eps: 0.001
+
+#...Training parameters
+
+train:
+  device: cpu
+  multi_gpu: false
+  batch_size: 1024
+  data_split_frac: [0.7, 0.1, 0.2]  # train / val / test
+  epochs: 100
+  early_stopping: null
+  min_epochs: null
+  print_epochs: 10
+  num_workers: 8
+  pin_memory: true
+
+  optimizer:
+    name: AdamW
+    params:
+      lr: 0.001
+      weight_decay: 5.0e-5
+      betas: [0.9, 0.999]
+      eps: 1.e-8
+      amsgrad: false
+    gradient_clip: 1.0
+
+  scheduler: 
+    name: CosineAnnealingLR
+    params: 
+      T_max: 20
+      eta_min: 1.0e-4
+      last_epoch: -1
+
+
