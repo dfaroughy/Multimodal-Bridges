@@ -1,7 +1,7 @@
 #...General experiment parameters
 experiment:
   run_name: aoj_generation
-  workdir: /Users/dario/Dropbox/PROJECTS/ML/CMB/results/runs/aoj
+  workdir: /home/df630/CMB/results/runs/aoj
 
 #...Data parameters
 
@@ -9,12 +9,11 @@ data:
   target:
     name: AspenOpenJets
     path:
-      # - /Users/dario/Dropbox/PROJECTS/ML/JetData/AspenOpenJets/data/2016H_job1.h5
       - /home/df630/CMB/data/AOJ/2016H_job0.h5
     params:
       min_num_particles: 0
       max_num_particles: 128
-      num_jets: 100_000
+      num_jets: 10_000
 
   source: 
     name: GaussNoise
@@ -26,8 +25,8 @@ data:
 
   dim:
     features_continuous: 3             # pt_rel, eta_rel, phi_phi
-    context_continuous: 0
     features_discrete: 1               # num of transition rates
+    context_continuous: 0
     context_discrete: 0      
   
   vocab_size: 

@@ -24,6 +24,35 @@ from utils import (
 )
 
 
+@dataclass
+class BridgeState:
+    time: torch.Tensor = None
+    continuous: torch.Tensor = None
+    discrete: torch.Tensor = None
+    absorbing: torch.Tensor = None
+
+    def to(self, device):
+        return BridgeState(
+            time=self.time.to(device) if isinstance(self.time, torch.Tensor) else None,
+            continuous=self.continuous.to(device)
+            if isinstance(self.continuous, torch.Tensor)
+            else None,
+            discrete=self.discrete.to(device)
+            if isinstance(self.discrete, torch.Tensor)
+            else None,
+            absorbing=self.absorbing.to(device)
+            if isinstance(self.absorbing, torch.Tensor)
+            else None,
+        )
+
+
+@dataclass
+class OutputHeads:
+    continuous: torch.Tensor = None
+    discrete: torch.Tensor = None
+    absorbing: torch.Tensor = None
+
+
 class JetDataclass:
     """class that prepares the source-target coupling"""
 
@@ -49,7 +78,9 @@ class JetDataclass:
             else None
         )
 
-        kwargs_source["num_jets"] = getattr(config.data.source.params, "num_jets", len(self.target))
+        kwargs_source["num_jets"] = getattr(
+            config.data.source.params, "num_jets", len(self.target)
+        )
 
         self.source = ParticleClouds(
             dataset=config.data.source.name,
@@ -58,13 +89,17 @@ class JetDataclass:
         )
 
     def preprocess(self):
-
-        self.source.preprocess(output_continuous=self.config.data.preprocess.continuous, 
-                               output_discrete=self.config.data.preprocess.discrete)
-        self.target.preprocess(output_continuous=self.config.data.preprocess.continuous, 
-                               output_discrete=self.config.data.preprocess.discrete)
+        self.source.preprocess(
+            output_continuous=self.config.data.preprocess.continuous,
+            output_discrete=self.config.data.preprocess.discrete,
+        )
+        self.target.preprocess(
+            output_continuous=self.config.data.preprocess.continuous,
+            output_discrete=self.config.data.preprocess.discrete,
+        )
         self.config.data.source.stats = self.source.stats
         self.config.data.target.stats = self.target.stats
+
 
 class ParticleClouds:
     def __init__(self, dataset="JetClass", data_paths=None, **data_params):
@@ -77,6 +112,13 @@ class ParticleClouds:
             if not self.discrete.nelement():
                 del self.discrete
 
+        elif isinstance(dataset, BridgeState):
+            self.continuous = dataset.continuous
+            self.discrete = dataset.discrete
+            self.mask = dataset.absorbing
+            if not self.discrete.nelement():
+                del self.discrete
+
         elif "JetClass" in dataset:
             assert data_paths is not None, "Specify the path to the JetClass dataset"
             self.continuous, self.discrete, self.mask = extract_jetclass_features(
@@ -84,9 +126,7 @@ class ParticleClouds:
             )
 
         elif "AspenOpenJets" in dataset:
-            assert (
-                data_paths is not None
-            ), "Specify the path to the AspenOpenJet dataset"
+            assert data_paths is not None, "Specify the path to the AOJ dataset"
             self.continuous, self.discrete, self.mask = extract_aoj_features(
                 data_paths, **data_params
             )

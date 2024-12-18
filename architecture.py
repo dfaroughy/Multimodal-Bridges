@@ -31,7 +31,7 @@ class MultiModalEPiC(nn.Module):
     def forward(
         self, t, x, k, mask=None, context_continuous=None, context_discrete=None
     ):
-        h = self.epic(t, x, k, context_continuous, context_discrete, mask)
+        h = self.epic(t, x, k, mask, context_continuous, context_discrete)
         continuous_head = h[..., : self.dim_features_continuous]
         discrete_head = h[..., self.dim_features_continuous :]
         absorbing_head = mask  # TODO
@@ -55,8 +55,6 @@ class EPiC(nn.Module):
 
     def __init__(self, config):
         super().__init__()
-
-        self.device = config.train.device
 
         # ...data dimensions:
         self.dim_features_continuous = config.data.dim.features_continuous
@@ -97,11 +95,8 @@ class EPiC(nn.Module):
         )
 
     def forward(
-        self, t, x, k=None, context_continuous=None, context_discrete=None, mask=None
+        self, t, x, k=None, mask=None, context_continuous=None, context_discrete=None
     ):
-        t = t.to(self.device)
-        x = x.to(t.device)
-        k = k.to(t.device) if isinstance(k, torch.Tensor) else None
 
         context_continuous = (
             context_continuous.to(t.device)
@@ -113,10 +108,9 @@ class EPiC(nn.Module):
             if isinstance(context_discrete, torch.Tensor)
             else None
         )
-        mask = mask.to(t.device)
 
         x_local_emb, context_emb = self.embedding(
-            t, x, k, context_continuous, context_discrete, mask
+            t, x, k, mask, context_continuous, context_discrete
         )
         h = self.epic(x_local_emb, context_emb, mask)
         return h
@@ -379,7 +373,7 @@ class InputEmbeddings(nn.Module):
                 )
 
     def forward(
-        self, t, x, k, context_continuous=None, context_discrete=None, mask=None
+        self, t, x, k, mask=None, context_continuous=None, context_discrete=None 
     ):
         """
         Forward pass of the particle embedding.
