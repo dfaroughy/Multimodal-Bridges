@@ -14,7 +14,7 @@ plt.rcParams["figure.autolayout"] = False
 
 vector.register_awkward()
 
-from cmb.datasets.utils import (
+from utils import (
     extract_jetclass_features,
     extract_aoj_features,
     sample_noise,

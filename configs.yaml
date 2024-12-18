@@ -1,6 +1,6 @@
 #...General experiment parameters
 experiment:
-  run_name: aoj_generation_CMB_final
+  run_name: aoj_generation
   workdir: /Users/dario/Dropbox/PROJECTS/ML/CMB/results/runs/aoj
 
 #...Data parameters
@@ -9,7 +9,8 @@ data:
   target:
     name: AspenOpenJets
     path:
-      - /Users/dario/Dropbox/PROJECTS/ML/JetData/AspenOpenJets/data/2016H_job1.h5
+      # - /Users/dario/Dropbox/PROJECTS/ML/JetData/AspenOpenJets/data/2016H_job1.h5
+      - /home/df630/CMB/data/AOJ/2016H_job0.h5
     params:
       min_num_particles: 0
       max_num_particles: 128
@@ -40,7 +41,7 @@ data:
 #...Model parameters
 
 model: 
-  name: HybridEPiC
+  name: MultiModalEPiC
   num_blocks: 10
   dim:
     emb_time: 16
@@ -82,14 +83,10 @@ pipeline:
 #...Training parameters
 
 train:
-  device: cpu
-  multi_gpu: false
+  device: cuda:0
   batch_size: 1024
   data_split_frac: [0.7, 0.1, 0.2]  # train / val / test
   epochs: 100
-  early_stopping: null
-  min_epochs: null
-  print_epochs: 10
   num_workers: 8
   pin_memory: true
 
@@ -101,7 +98,6 @@ train:
       betas: [0.9, 0.999]
       eps: 1.e-8
       amsgrad: false
-    gradient_clip: 1.0
 
   scheduler: 
     name: CosineAnnealingLR
