@@ -4,3 +4,4 @@ uproot
 h5py
 fastjet
 seaborn
+rich

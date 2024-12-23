@@ -1,10 +1,160 @@
 import torch
 import torch.nn as nn
-import lightning.pytorch as pl
+import lightning as L
 from dataclasses import dataclass
 from torch.nn.functional import softmax
 from torch.distributions import Categorical
 from tqdm.auto import tqdm
+
+from architecture import MultiModalEPiC
+from jetdata import BridgeState, OutputHeads
+
+
+class AbsorbingBridgeMatching(L.LightningModule):
+    """Model for hybrid data with varying size"""
+
+    def __init__(self, config):
+        super().__init__()
+        self.config = config
+        self.vocab_size = config.data.vocab_size.features
+
+        self.encoder = MultiModalEPiC(config)
+
+        self.bridge_continuous = LinearUniformBridge(config)
+        self.bridge_discrete = TelegraphBridge(config)
+        self.bridge_absorbing = None
+
+        self.loss_continuous_fn = nn.MSELoss(reduction="none")
+        self.loss_discrete_fn = nn.CrossEntropyLoss(reduction="none")
+        self.loss_absorbing_fn = None
+
+        self.save_hyperparameters()
+
+    def forward(self, state, batch):
+        continuous, discrete, absorbing = self.encoder(
+            t=state.time,
+            x=state.continuous,
+            k=state.discrete,
+            mask=state.absorbing,
+            context_continuous=getattr(batch, "context_continuous", None),
+            context_discrete=getattr(batch, "context_discrete", None),
+        )
+        return OutputHeads(continuous, discrete, absorbing)
+
+    def sample_bridges(self, batch):
+        """sample stochastic bridges"""
+        t = torch.rand(
+            batch.target_continuous.shape[0], device=batch.target_continuous.device
+        ).type_as(batch.target_continuous)
+
+        time = self.reshape_time(t, batch.target_continuous)
+
+        continuous = self.bridge_continuous.sample(
+            time, batch.source_continuous, batch.target_continuous
+        )
+
+        discrete = self.bridge_discrete.sample(
+            time, batch.source_discrete, batch.target_discrete
+        )
+
+        absorbing = batch.target_mask  # replace with absorbing bridge when implemented
+
+        return BridgeState(time, continuous, discrete, absorbing)
+
+    def loss_continuous(self, heads: OutputHeads, state: BridgeState, batch):
+        """mean square error loss for velocity field"""
+        vector = heads.continuous
+        mask = heads.absorbing
+
+        ut = self.bridge_continuous.drift(
+            t=state.time,
+            x=state.continuous,
+            x0=batch.source_continuous,
+            x1=batch.target_continuous,
+        ).to(vector.device)
+        loss_mse = self.loss_continuous_fn(vector, ut) * mask
+        return loss_mse.sum() / mask.sum()
+
+    def loss_discrete(self, heads: OutputHeads, batch):
+        """cross-entropy loss for discrete state classifier"""
+        logits = heads.discrete
+        targets = batch.target_discrete
+        mask = heads.absorbing
+        logits = heads.discrete.reshape(-1, self.vocab_size)
+        targets = batch.target_discrete.reshape(-1).long()
+        targets = targets.to(logits.device)
+        mask = mask.reshape(-1)
+        loss_ce = self.loss_discrete_fn(logits, targets) * mask
+        return loss_ce.sum() / mask.sum()
+
+    def loss_absorbing(self, heads: OutputHeads, batch):
+        # TODO
+        pass
+
+    def reshape_time(self, t, x):
+        if isinstance(t, (float, int)):
+            return t
+        else:
+            return t.reshape(-1, *([1] * (x.dim() - 1)))
+
+    ###########################
+    ### Lightning functions ###
+    ###########################
+
+    def training_step(self, batch, batch_idx):
+        state = self.sample_bridges(batch)
+        state = state.to(self.device)
+        heads = self.forward(state, batch)
+        loss_continous = self.loss_continuous(heads, state, batch)
+        loss_discrete = self.loss_discrete(heads, batch)
+        loss = loss_continous + loss_discrete
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        state = self.sample_bridges(batch)
+        state = state.to(self.device)
+        heads = self.forward(state, batch)
+        loss_continous = self.loss_continuous(heads, state, batch)
+        loss_discrete = self.loss_discrete(heads, batch)
+        loss = loss_continous + loss_discrete
+        self.log("val_loss", loss, on_step=True, on_epoch=True)
+        return loss
+
+    def predict_step(self, batch, batch_idx):
+        """generate target data from source data using trained dynamics"""
+        time_steps = torch.linspace(
+            0.0,
+            1.0 - self.config.pipeline.time_eps,
+            self.config.pipeline.num_timesteps,
+            device=self.device,
+        )
+        delta_t = (time_steps[-1] - time_steps[0]) / (len(time_steps) - 1)
+        delta_t = delta_t.to(self.device)
+        state = BridgeState(
+            None,
+            batch.source_continuous,
+            batch.source_discrete,
+            batch.source_mask,
+        )
+        state = state.to(self.device)
+        for time in time_steps[1:]:
+            state.time = torch.full((len(batch[0]), 1), time.item(), device=self.device)
+            heads = self.forward(state, batch)
+            state = self.bridge_continuous.solver_step(state, heads, delta_t)
+            state = self.bridge_discrete.solver_step(state, heads, delta_t)
+        return state
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.Adam(
+            self.parameters(), lr=self.config.train.optimizer.params.lr
+        )
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=self.config.train.scheduler.params.T_max,  # Adjust as needed
+            eta_min=self.config.train.scheduler.params.eta_min,  # Adjust as needed
+        )
+        return [optimizer], [scheduler]
 
 
 class LinearUniformBridge:
@@ -44,7 +194,7 @@ class LinearUniformBridge:
 
 
 class SchrodingerBridge:
-    """Schrodinger bridge for continuous states   
+    """Schrodinger bridge for continuous states
     notation:
       - t: time
       - x0: continuous source state at t=0
@@ -52,6 +202,7 @@ class SchrodingerBridge:
       - x: continuous state at time t
       - z: noise
     """
+
     def __init__(self, config: dataclass):
         self.sigma = config.dynamics.params.sigma
 
@@ -80,12 +231,13 @@ class SchrodingerBridge:
 
 
 class TelegraphBridge:
-    """Multivariate Telegraph bridge for discrete states    
-      - t: time
-      - k0: discrete source state at t=0
-      - k1: discrete  target state at t=1
-      - k: discrete state at time t
+    """Multivariate Telegraph bridge for discrete states
+    - t: time
+    - k0: discrete source state at t=0
+    - k1: discrete  target state at t=1
+    - k: discrete state at time t
     """
+
     def __init__(self, config: dataclass):
         self.gamma = config.dynamics.params.gamma
         self.time_epsilon = config.pipeline.time_eps
@@ -119,8 +271,7 @@ class TelegraphBridge:
         # ...Telegraph process rates:
 
         S = self.vocab_size
-        t = t.squeeze()
-        t1 = 1.0 - self.time_epsilon
+        t, t1 = t.squeeze(), 1.0
         wt = torch.exp(-S * self.gamma * (t1 - t))
         A = 1.0
         B = (wt * S) / (1.0 - wt)
@@ -176,14 +327,20 @@ class TelegraphBridge:
     def solver_step(self, state, heads, delta_t):
         """tau-leaping step for master equation solver"""
         rates = self.rate(t=state.time, k=state.discrete, logits=heads.discrete)
+        assert (rates >= 0).all(), "Negative rates!"
         state.discrete = state.discrete.squeeze(-1)
         # max_rate = torch.max(rates, dim=2)[1]
-        all_jumps = torch.poisson(rates * delta_t).to(state.time.device) 
+        all_jumps = torch.poisson(rates * delta_t).to(state.time.device)
         jump_mask = torch.sum(all_jumps, dim=-1).type_as(state.discrete) <= 1
-        diff = torch.arange(self.vocab_size, device=state.time.device).view(1, 1, self.vocab_size) - state.discrete[:, :, None]
+        diff = (
+            torch.arange(self.vocab_size, device=state.time.device).view(
+                1, 1, self.vocab_size
+            )
+            - state.discrete[:, :, None]
+        )
         net_jumps = torch.sum(all_jumps * diff, dim=-1).type_as(state.discrete)
         state.discrete += net_jumps * jump_mask
-        state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size-1)    
+        state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
         state.discrete = state.discrete.unsqueeze(-1)
         state.discrete *= heads.absorbing
         return state

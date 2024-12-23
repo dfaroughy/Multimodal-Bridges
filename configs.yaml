@@ -1,6 +1,6 @@
 #...General experiment parameters
 experiment:
-  run_name: aoj_generation
+  run_name: aoj_training
   workdir: /home/df630/CMB/results/runs/aoj
 
 #...Data parameters
@@ -10,10 +10,14 @@ data:
     name: AspenOpenJets
     path:
       - /home/df630/CMB/data/AOJ/2016H_job0.h5
+      - /home/df630/CMB/data/AOJ/2016H_job1.h5
+      - /home/df630/CMB/data/AOJ/2016H_job2.h5
     params:
       min_num_particles: 0
       max_num_particles: 128
-      num_jets: 10_000
+    preprocess:
+      continuous: standardize
+      discrete: tokens
 
   source: 
     name: GaussNoise
@@ -22,21 +26,20 @@ data:
       scale: 1.0
       min_num_particles: 0
       max_num_particles: 128
+    preprocess:
+      continuous: null
+      discrete: tokens
 
   dim:
-    features_continuous: 3             # pt_rel, eta_rel, phi_phi
-    features_discrete: 1               # num of transition rates
+    features_continuous: 3             # pt, eta_rel, phi_phi
+    features_discrete: 1               # flavor x charge
     context_continuous: 0
     context_discrete: 0      
   
   vocab_size: 
-      features: 8 
-      context: 0  
+    features: 8 
+    context: 0  
 
-  preprocess:
-    continuous: standardize
-    discrete: states
-    
 #...Model parameters
 
 model: 
@@ -45,7 +48,7 @@ model:
   dim:
     emb_time: 16
     emb_features_continuous: 16
-    emb_features_discrete: 6
+    emb_features_discrete: 16
     emb_context_continuous: 0
     emb_context_discrete: 0
     hidden_local: 128
@@ -76,19 +79,15 @@ dynamics:
 
 pipeline:
   method: EulerLeapingSolver
-  num_timesteps: 1000
-  time_eps: 0.001
+  num_timesteps: 200
+  time_eps: 0.00001
 
 #...Training parameters
 
 train:
-  device: cuda:0
   batch_size: 1024
-  data_split_frac: [0.7, 0.1, 0.2]  # train / val / test
-  epochs: 100
-  num_workers: 8
-  pin_memory: true
-
+  data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
+  epochs: 500
   optimizer:
     name: AdamW
     params:
@@ -101,7 +100,7 @@ train:
   scheduler: 
     name: CosineAnnealingLR
     params: 
-      T_max: 20
+      T_max: 500
       eta_min: 1.0e-4
       last_epoch: -1
 

@@ -8,6 +8,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
 from dataclasses import dataclass
+from typing import List
 
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
@@ -43,6 +44,26 @@ class BridgeState:
             absorbing=self.absorbing.to(device)
             if isinstance(self.absorbing, torch.Tensor)
             else None,
+        )
+
+    @staticmethod
+    def cat(states: List["BridgeState"], dim=0) -> "BridgeState":
+        # Helper function to cat a specific attribute if not None
+        def cat_attr(attr_name):
+            attrs = [getattr(s, attr_name) for s in states]
+            # Check if all are None
+            if all(a is None for a in attrs):
+                return None
+            # Otherwise, all should be Tensors
+            # Filter out None if needed (or assert if None is found)
+            attrs = [a for a in attrs if a is not None]
+            return torch.cat(attrs, dim=dim)
+
+        return BridgeState(
+            time=cat_attr("time"),
+            continuous=cat_attr("continuous"),
+            discrete=cat_attr("discrete"),
+            absorbing=cat_attr("absorbing"),
         )
 
 
@@ -88,17 +109,49 @@ class JetDataclass:
             **kwargs_source,
         )
 
-    def preprocess(self):
-        self.source.preprocess(
-            output_continuous=self.config.data.preprocess.continuous,
-            output_discrete=self.config.data.preprocess.discrete,
-        )
-        self.target.preprocess(
-            output_continuous=self.config.data.preprocess.continuous,
-            output_discrete=self.config.data.preprocess.discrete,
-        )
-        self.config.data.source.stats = self.source.stats
-        self.config.data.target.stats = self.target.stats
+    def preprocess(self, source_stats=None, target_stats=None):
+        if hasattr(self.config.data.source, "preprocess"):
+            self.source.preprocess(
+                output_continuous=self.config.data.source.preprocess.continuous,
+                output_discrete=self.config.data.source.preprocess.discrete,
+                stats=source_stats,
+            )
+            self.config.data.source.preprocess.stats = (
+                self.source.stats if hasattr(self.source, "stats") else target_stats
+            )
+        if hasattr(self.config.data.target, "preprocess"):
+            self.target.preprocess(
+                output_continuous=self.config.data.target.preprocess.continuous,
+                output_discrete=self.config.data.target.preprocess.discrete,
+                stats=target_stats,
+            )
+            self.config.data.target.preprocess.stats = (
+                self.target.stats if hasattr(self.target, "stats") else source_stats
+            )
+
+    def postprocess(self, source_stats=None, target_stats=None):
+        if hasattr(self.config.data.source, "preprocess"):
+            self.source.postprocess(
+                input_continuous=self.config.data.source.preprocess.continuous,
+                input_discrete=self.config.data.source.preprocess.discrete,
+                stats=self.config.data.source.preprocess.stats
+                if source_stats is None
+                else source_stats,
+            )
+            self.config.data.source.preprocess.stats = (
+                self.source.stats if hasattr(self.source, "stats") else target_stats
+            )
+        if hasattr(self.config.data.target, "preprocess"):
+            self.target.postprocess(
+                input_continuous=self.config.data.target.preprocess.continuous,
+                input_discrete=self.config.data.target.preprocess.discrete,
+                stats=self.config.data.target.preprocess.stats
+                if target_stats is None
+                else target_stats,
+            )
+            self.config.data.target.preprocess.stats = (
+                self.target.stats if hasattr(self.target, "stats") else source_stats
+            )
 
 
 class ParticleClouds:
@@ -170,13 +223,13 @@ class ParticleClouds:
         }
 
     def preprocess(
-        self, output_continuous="standardize", output_discrete="states", stats=None
+        self, output_continuous="standardize", output_discrete="tokens", stats=None
     ):
         if output_discrete == "onehot_dequantize":
             one_hot = flavor_to_onehot(self.discrete[..., :-1], self.discrete[..., -1])
             self.continuous = torch.cat([self.continuous, one_hot], dim=-1)
             del self.discrete
-        elif output_discrete == "states":
+        elif output_discrete == "tokens":
             one_hot = flavor_to_onehot(self.discrete[..., :-1], self.discrete[..., -1])
             self.discrete = torch.argmax(one_hot, dim=-1).unsqueeze(-1).long()
 
@@ -191,7 +244,7 @@ class ParticleClouds:
             self.phi_rel = self.continuous[..., 2]
 
     def postprocess(
-        self, input_continuous="standardize", input_discrete="states", stats=None
+        self, input_continuous="standardize", input_discrete="tokens", stats=None
     ):
         if input_continuous == "standardize":
             if input_discrete == "onehot_dequantize":
@@ -217,7 +270,7 @@ class ParticleClouds:
             self.discrete *= self.mask
             self.continuous = self.continuous[..., :3]
 
-        if input_discrete == "states":
+        if input_discrete == "tokens":
             self.flavor, self.charge = states_to_flavor(self.discrete)
             self.discrete = torch.cat([self.flavor, self.charge], dim=-1)
             self.flavor *= self.mask
