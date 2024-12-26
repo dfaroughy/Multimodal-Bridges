@@ -1,5 +1,8 @@
 # Byte-compiled / optimized / DLL files
 lightning_logs
+train.py
+perlmutter_*.sh
+
 __pycache__/
 *.py[cod]
 *$py.class
