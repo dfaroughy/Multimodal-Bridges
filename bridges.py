@@ -151,8 +151,9 @@ class AbsorbingBridgeMatching(L.LightningModule):
         )
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer,
-            T_max=self.config.train.scheduler.params.T_max,  # Adjust as needed
-            eta_min=self.config.train.scheduler.params.eta_min,  # Adjust as needed
+            T_max=self.config.train.scheduler.params.T_max,
+            eta_min=self.config.train.scheduler.params.eta_min,
+            last_epoch=self.config.train.scheduler.params.last_epoch,
         )
         return [optimizer], [scheduler]
 
