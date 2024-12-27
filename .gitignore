@@ -1,7 +1,7 @@
 # Byte-compiled / optimized / DLL files
 experiments/lightning_logs_
 experiments/lightning_logs
-# experiments/*.yaml
+experiments/*.yaml
 experiments/*.sh
 
 __pycache__/
