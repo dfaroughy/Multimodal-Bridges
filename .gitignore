@@ -1,9 +1,8 @@
 # Byte-compiled / optimized / DLL files
-lightning_logs_*
-lightning_logs
-train.py
-inference.py
-perlmutter_*.sh
+experiments/lightning_logs_
+experiments/lightning_logs
+# experiments/*.yaml
+experiments/*.sh
 
 __pycache__/
 *.py[cod]

@@ -1,0 +1,123 @@
+#...General experiment parameters
+experiment:
+  run_name: aoj_training
+  # workdir: /home/df630/CMB/results/runs/aoj
+  workdir: /pscratch/sd/d/dfarough/CMB/results/aoj
+
+#...Data parameters
+
+data:
+  target:
+    name: AspenOpenJets
+    path:
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job0.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job1.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job2.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job3.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job4.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job5.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job6.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job7.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job8.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job9.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job10.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job11.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job12.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job13.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job14.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job15.h5
+      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job16.h5
+    params:
+      min_num_particles: 0
+      max_num_particles: 128
+      num_jets: 1_000_000
+    preprocess:
+      continuous: standardize
+      discrete: tokens
+
+  source: 
+    name: GaussNoise
+    path: null
+    params:
+      scale: 1.0
+      min_num_particles: 0
+      max_num_particles: 128
+    preprocess:
+      continuous: null
+      discrete: tokens
+
+  dim:
+    features_continuous: 3             # pt, eta_rel, phi_phi
+    features_discrete: 1               # flavor x charge
+    context_continuous: 0
+    context_discrete: 0      
+  
+  vocab_size: 
+    features: 8 
+    context: 0  
+
+#...Model parameters
+
+model: 
+  name: MultiModalEPiC
+  num_blocks: 16
+  dim:
+    emb_time: 16
+    emb_features_continuous: 16
+    emb_features_discrete: 16
+    emb_context_continuous: 0
+    emb_context_discrete: 0
+    hidden_local: 200
+    hidden_glob: 16
+
+  embedding:
+    time: SinusoidalPositionalEncoding
+    features_continuous: Linear
+    features_discrete: Embedding
+    context_continuous: null
+    context_discrete: null
+
+  skip_connection: true
+  dropout: 0.1
+  activation: SELU
+  add_discrete_head: true
+
+#...Dynamics parameters
+
+dynamics: 
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+  params:
+    sigma: 0.0001
+    gamma: 0.125
+
+#...Pipeline generation parameters
+
+pipeline:
+  method: EulerLeapingSolver
+  num_timesteps: 1000
+  time_eps: 0.0001
+
+#...Training parameters
+
+train:
+  batch_size: 1024
+  data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
+  epochs: 1000
+  optimizer:
+    name: AdamW
+    params:
+      lr: 0.001
+      weight_decay: 5.0e-5
+      betas: [0.9, 0.999]
+      eps: 1.e-8
+      amsgrad: false
+
+  scheduler: 
+    name: CosineAnnealingLR
+    params: 
+      T_max: 1000
+      eta_min: 5.0e-5
+      last_epoch: -1
+
+
