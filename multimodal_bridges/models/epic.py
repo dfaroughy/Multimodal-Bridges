@@ -4,7 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
-from utils import InputEmbeddings
+from models.utils import InputEmbeddings
 
 class MultiModalEPiC(nn.Module):
     """Permutation equivariant architecture for multi-modal continuous-discrete models"""

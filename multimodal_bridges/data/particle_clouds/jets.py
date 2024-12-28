@@ -12,7 +12,7 @@ plt.rcParams["figure.autolayout"] = False
 
 vector.register_awkward()
 
-from mmb.data.particle_clouds.particles import ParticleClouds
+from data.particle_clouds.particles import ParticleClouds
 
 
 class JetDataclass:

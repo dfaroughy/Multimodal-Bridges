@@ -1,36 +1,21 @@
 #...General experiment parameters
 experiment:
   run_name: aoj_training
-  # workdir: /home/df630/CMB/results/runs/aoj
-  workdir: /pscratch/sd/d/dfarough/CMB/results/aoj
-
+  workdir: /home/df630/Multimodal-Bridges/experiments/results/AOJ
+  
 #...Data parameters
 
 data:
   target:
     name: AspenOpenJets
     path:
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job0.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job1.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job2.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job3.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job4.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job5.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job6.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job7.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job8.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job9.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job10.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job11.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job12.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job13.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job14.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job15.h5
-      - /pscratch/sd/d/dfarough/aoj/cernbox.cern.ch/remote.php/dav/public-files/r2Rw4sa1nROtsSl/2016H_job16.h5
+      - /home/df630/CMB/data/AOJ/2016H_job0.h5
+      - /home/df630/CMB/data/AOJ/2016H_job1.h5
+      - /home/df630/CMB/data/AOJ/2016H_job2.h5
     params:
       min_num_particles: 0
       max_num_particles: 128
-      num_jets: 1_000_000
+      num_jets: 100_000
     preprocess:
       continuous: standardize
       discrete: tokens
@@ -60,14 +45,14 @@ data:
 
 model: 
   name: MultiModalEPiC
-  num_blocks: 16
+  num_blocks: 10
   dim:
     emb_time: 16
     emb_features_continuous: 16
     emb_features_discrete: 16
     emb_context_continuous: 0
     emb_context_discrete: 0
-    hidden_local: 200
+    hidden_local: 128
     hidden_glob: 16
 
   embedding:

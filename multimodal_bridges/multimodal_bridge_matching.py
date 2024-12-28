@@ -4,8 +4,8 @@ import lightning as L
 from dataclasses import dataclass
 from typing import List
 
-from mmb.models.epic import MultiModalEPiC
-from mmb.bridges import LinearUniformBridge, TelegraphBridge
+from models.epic import MultiModalEPiC
+from bridges import LinearUniformBridge, TelegraphBridge
 
 
 @dataclass
@@ -70,7 +70,7 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         self.loss_continuous_fn = nn.MSELoss(reduction="none")
         self.loss_discrete_fn = nn.CrossEntropyLoss(reduction="none")
-        self.loss_absorbing_fn = None
+        self.loss_absorbing_fn = None # implement absorbing loss
 
         self.save_hyperparameters()
 
