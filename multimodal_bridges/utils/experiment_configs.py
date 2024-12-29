@@ -19,15 +19,15 @@ class Configs:
 
         if hasattr(self, "experiment"):
             if not hasattr(self.experiment, "type"):
-                if hasattr(self.dynamics, "discrete") and not hasattr(
-                    self.dynamics, "continuous"
+                if hasattr(self.dynamics, "bridge_discrete") and not hasattr(
+                    self.dynamics, "bridge_continuous"
                 ):
                     self.experiment.type = "discrete"
                     assert self.data.dim.features_discrete > 0
                     self.data.dim.features_continuous = 0
 
-                elif hasattr(self.dynamics, "continuous") and not hasattr(
-                    self.dynamics, "discrete"
+                elif hasattr(self.dynamics, "bridge_continuous") and not hasattr(
+                    self.dynamics, "bridge_discrete"
                 ):
                     assert self.data.dim.features_continuous > 0
                     self.experiment.type = "continuous"
@@ -131,3 +131,20 @@ class Configs:
         config_dict = self.to_dict()
         with open(path, "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False)
+
+
+    def flatten_dict(self):
+        """
+        Flattens the configuration into a single-level dictionary with dot-separated keys.
+        """
+        def _flatten_dict(d, parent_key='', sep='.'):
+            items = []
+            for k, v in d.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(_flatten_dict(v, new_key, sep=sep).items())
+                else:
+                    items.append((new_key, v))
+            return dict(items)
+
+        return _flatten_dict(self.to_dict())

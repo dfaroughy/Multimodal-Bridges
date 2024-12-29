@@ -11,7 +11,9 @@ data:
     path:
       - /home/df630/CMB/data/AOJ/2016H_job0.h5
       - /home/df630/CMB/data/AOJ/2016H_job1.h5
-      - /home/df630/CMB/data/AOJ/2016H_job2.h5
+      - /home/df630/CMB/data/AOJ/2016H_job3.h5
+      - /home/df630/CMB/data/AOJ/2016H_job4.h5
+      - /home/df630/CMB/data/AOJ/2016H_job5.h5
     params:
       min_num_particles: 0
       max_num_particles: 128
@@ -79,7 +81,6 @@ dynamics:
 #...Pipeline generation parameters
 
 pipeline:
-  method: EulerLeapingSolver
   num_timesteps: 1000
   time_eps: 0.0001
 
@@ -97,7 +98,6 @@ train:
       betas: [0.9, 0.999]
       eps: 1.e-8
       amsgrad: false
-
   scheduler: 
     name: CosineAnnealingLR
     params: 

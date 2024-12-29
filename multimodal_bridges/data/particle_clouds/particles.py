@@ -31,7 +31,7 @@ class ParticleClouds:
         elif isinstance(dataset, BridgeState):
             self.continuous = dataset.continuous
             self.discrete = dataset.discrete
-            self.mask = dataset.absorbing
+            self.mask = dataset.mask
             if not self.discrete.nelement():
                 del self.discrete
 

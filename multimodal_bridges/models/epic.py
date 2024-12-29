@@ -35,12 +35,11 @@ class MultiModalEPiC(nn.Module):
         h = self.epic(t, x, k, mask, context_continuous, context_discrete)
         continuous_head = h[..., : self.dim_features_continuous]
         discrete_head = h[..., self.dim_features_continuous :]
-        absorbing_head = mask  # TODO
 
         if self.add_discrete_head:
-            return continuous_head, self.fc_layer(discrete_head), absorbing_head
+            return continuous_head, self.fc_layer(discrete_head)
         else:
-            return continuous_head, discrete_head, absorbing_head
+            return continuous_head, discrete_head
 
 
 class EPiC(nn.Module):
