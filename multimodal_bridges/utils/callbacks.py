@@ -1,40 +1,60 @@
 import os
 import mlflow
-import pytorch_lightning as L
+from lightning.pytorch.callbacks import Callback
 
 
+class MetricLoggerCallback(Callback):
+    """
+    Custom MLflow Callback to handle logging and saving checkpoints as MLflow artifacts.
+    """
 
-class MLflowCallback(L.callbacks.Callback):
-    def __init__(
-        self,
-        experiment_name="default",
-        tracking_uri="file:./mlruns",
-        run_name=None,
-        artifact_subdir="artifacts",
-    ):
+    def __init__(self):
         super().__init__()
-        self.experiment_name = experiment_name
-        self.tracking_uri = tracking_uri
-        self.run_name = run_name
-        self.artifact_subdir = artifact_subdir
 
-    def on_fit_start(self, trainer, pl_module):
-        # Set up MLflow but do not handle metrics/logging here
-        mlflow.set_tracking_uri(self.tracking_uri)
-        mlflow.set_experiment(self.experiment_name)
-        self.run = mlflow.start_run(run_name=self.run_name)
+    def setup(self, trainer, pl_module, stage=None):
+        self.artifact_dir = mlflow.get_artifact_uri("checkpoints")
+        os.makedirs(self.artifact_dir, exist_ok=True)
 
-    def on_fit_end(self, trainer, pl_module):
-        # Log artifacts like checkpoints
-        if trainer.checkpoint_callback:
-            checkpoint_path = trainer.checkpoint_callback.best_model_path
-            artifact_path = os.path.join(self.artifact_subdir, "checkpoints")
-            os.makedirs(artifact_path, exist_ok=True)
-            mlflow.log_artifact(checkpoint_path, artifact_path)
-        mlflow.end_run()
+    def on_train_end(self, trainer, pl_module):
+        """
+        Log the checkpoint directory to MLflow at the end of training.
+        """
+        if hasattr(self, "artifact_dir") and os.path.exists(self.artifact_dir):
+            mlflow.log_artifact(self.artifact_dir, artifact_path="checkpoints")
+        print("Training finished!")
 
-    def state_dict(self):
-        return {}
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        """
+        Logs metrics at the end of each training batch.
+        """
+        if outputs is not None:
+            pl_module.log("train_loss", outputs["loss"], on_epoch=True)
+            pl_module.log(
+                "train_loss_continuous", outputs["loss_individual"][0], on_epoch=True
+            )
+            pl_module.log(
+                "train_loss_discrete", outputs["loss_individual"][1], on_epoch=True
+            )
+            pl_module.log(
+                "train_weights_continuous", outputs["weights"][0], on_epoch=True
+            )
+            pl_module.log(
+                "train_weights_discrete", outputs["weights"][1], on_epoch=True
+            )
 
-    def load_state_dict(self, state_dict):
-        pass
+    def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        """
+        Logs metrics at the end of each validation batch.
+        """
+        if outputs is not None:
+            pl_module.log("val_loss", outputs["loss"], on_epoch=True)
+            pl_module.log(
+                "val_loss_continuous", outputs["loss_individual"][0], on_epoch=True
+            )
+            pl_module.log(
+                "val_loss_discrete", outputs["loss_individual"][1], on_epoch=True
+            )
+            pl_module.log(
+                "val_weights_continuous", outputs["weights"][0], on_epoch=True
+            )
+            pl_module.log("val_weights_discrete", outputs["weights"][1], on_epoch=True)

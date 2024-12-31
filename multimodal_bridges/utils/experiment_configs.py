@@ -60,12 +60,6 @@ class Configs:
                     "INFO: created experiment instance {}".format(self.experiment.name)
                 )
 
-            if self.experiment.type == "classifier":
-                if len(self.data.train.path) > 1:
-                    self.experiment.name = "multi_model"
-                else:
-                    self.experiment.name = "binary"
-
     def _set_attributes(self, config_dict):
         for key, value in config_dict.items():
             if isinstance(value, dict):  # create a sub-config object
