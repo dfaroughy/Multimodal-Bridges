@@ -6,7 +6,7 @@ from matplotlib.lines import Line2D
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
-from multimodal_bridge_matching import BridgeState
+from multimodal_bridge_matching import HybridState
 from data.particle_clouds.utils import (
     extract_jetclass_features,
     extract_aoj_features,
@@ -28,7 +28,7 @@ class ParticleClouds:
             if not self.discrete.nelement():
                 del self.discrete
 
-        elif isinstance(dataset, BridgeState):
+        elif isinstance(dataset, HybridState):
             self.continuous = dataset.continuous
             self.discrete = dataset.discrete
             self.mask = dataset.mask

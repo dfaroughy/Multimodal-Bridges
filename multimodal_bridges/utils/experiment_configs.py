@@ -1,7 +1,6 @@
-
 import yaml
-import random
-from datetime import datetime
+import mlflow.pytorch
+from pathlib import Path
 
 
 class Configs:
@@ -16,49 +15,6 @@ class Configs:
             raise ValueError("config_source must be a file path or a dictionary")
 
         self._set_attributes(config_dict)  # set attributes recursively
-
-        if hasattr(self, "experiment"):
-            if not hasattr(self.experiment, "type"):
-                if hasattr(self.dynamics, "bridge_discrete") and not hasattr(
-                    self.dynamics, "bridge_continuous"
-                ):
-                    self.experiment.type = "discrete"
-                    assert self.data.dim.features_discrete > 0
-                    self.data.dim.features_continuous = 0
-
-                elif hasattr(self.dynamics, "bridge_continuous") and not hasattr(
-                    self.dynamics, "bridge_discrete"
-                ):
-                    assert self.data.dim.features_continuous > 0
-                    self.experiment.type = "continuous"
-                    self.data.dim.features_discrete = 0
-
-                else:
-                    self.experiment.type = "multimodal"
-                    assert (
-                        self.data.dim.features_continuous > 0
-                        and self.data.dim.features_discrete > 0
-                    )
-
-            if not hasattr(self.experiment, "name"):
-                self.experiment.name = (
-                    f"{self.data.source.name}_to_{self.data.target.name}"
-                )
-
-                if hasattr(self.dynamics, "continuous"):
-                    self.experiment.name += f"_{self.dynamics.continuous.bridge}"
-
-                if hasattr(self.dynamics, "discrete"):
-                    self.experiment.name += f"_{self.dynamics.discrete.bridge}"
-
-                self.experiment.name += f"_{self.model.name}"
-
-                time = datetime.now().strftime("%Y.%m.%d_%Hh%M")
-                rnd = random.randint(0, 10000)
-                self.experiment.name += f"_{time}_{rnd}"
-                print(
-                    "INFO: created experiment instance {}".format(self.experiment.name)
-                )
 
     def _set_attributes(self, config_dict):
         for key, value in config_dict.items():
@@ -126,12 +82,12 @@ class Configs:
         with open(path, "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False)
 
-
     def flatten_dict(self):
         """
         Flattens the configuration into a single-level dictionary with dot-separated keys.
         """
-        def _flatten_dict(d, parent_key='', sep='.'):
+
+        def _flatten_dict(d, parent_key="", sep="."):
             items = []
             for k, v in d.items():
                 new_key = f"{parent_key}{sep}{k}" if parent_key else k
@@ -142,3 +98,21 @@ class Configs:
             return dict(items)
 
         return _flatten_dict(self.to_dict())
+
+
+def get_run_info(experiment_id=None, run_id=None, experiment_name=None, run_name=None):
+    """Returns `run_name` or `run_id` and articfact directory for a given run."""
+    client = mlflow.tracking.MlflowClient()
+    info = {}
+    if run_id and experiment_id:
+        for run in client.search_runs(experiment_ids=[experiment_id]):
+            info[run.info.run_id] = (run.info.run_name, Path(run.info.artifact_uri))
+        return info[run_id]
+    elif run_name and experiment_name:
+        experiment = client.get_experiment_by_name(experiment_name)
+        experiment_id = experiment.experiment_id
+        for run in client.search_runs(experiment_ids=[experiment_id]):
+            info[run.info.run_name] = (run.info.run_id, Path(run.info.artifact_uri))
+        return info[run_name]
+    else:
+        return None
