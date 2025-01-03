@@ -8,50 +8,50 @@ from collections import namedtuple
 class DataSetModule(Dataset):
     def __init__(self, data):
         self.data = data
-        self.attributes = []
+        self.attr = []
 
         # ...source
 
         if hasattr(self.data.source, "continuous"):
-            self.attributes.append("source_continuous")
+            self.attr.append("source_continuous")
             self.source_continuous = self.data.source.continuous
 
         if hasattr(self.data.source, "discrete"):
-            self.attributes.append("source_discrete")
+            self.attr.append("source_discrete")
             self.source_discrete = self.data.source.discrete
 
         if hasattr(self.data.source, "mask"):
-            self.attributes.append("source_mask")
+            self.attr.append("source_mask")
             self.source_mask = self.data.source.mask
 
         # ...target
 
         if hasattr(self.data.target, "continuous"):
-            self.attributes.append("target_continuous")
+            self.attr.append("target_continuous")
             self.target_continuous = self.data.target.continuous
 
         if hasattr(self.data.target, "discrete"):
-            self.attributes.append("target_discrete")
+            self.attr.append("target_discrete")
             self.target_discrete = self.data.target.discrete
 
         if hasattr(self.data.target, "mask"):
-            self.attributes.append("target_mask")
+            self.attr.append("target_mask")
             self.target_mask = self.data.target.mask
 
         # ...context
 
         if hasattr(self.data, "context_continuous"):
-            self.attributes.append("context_continuous")
+            self.attr.append("context_continuous")
             self.context_continuous = self.data.context_continuous
 
         if hasattr(self.data, "context_discrete"):
-            self.attributes.append("context_discrete")
+            self.attr.append("context_discrete")
             self.context_discrete = self.data.context_discrete
 
-        self.databatch = namedtuple("databatch", self.attributes)
+        self.databatch = namedtuple("databatch", self.attr)
 
     def __getitem__(self, idx):
-        return self.databatch(*[getattr(self, attr)[idx] for attr in self.attributes])
+        return self.databatch(*[getattr(self, attr)[idx] for attr in self.attr])
 
     def __len__(self):
         return len(self.data.target)
@@ -85,6 +85,7 @@ class DataloaderModule:
         total_size = len(self.dataset)
         train_size = int(total_size * self.data_split[0])
         valid_size = int(total_size * self.data_split[1])
+        test_size = int(total_size * self.data_split[2])
 
         # ...define splitting indices
 
@@ -95,9 +96,9 @@ class DataloaderModule:
 
         # ...Create Subset for each split
 
-        train_set = Subset(self.dataset, idx_train)
+        train_set = Subset(self.dataset, idx_train) if train_size > 0 else None
         valid_set = Subset(self.dataset, idx_valid) if valid_size > 0 else None
-        test_set = Subset(self.dataset, idx_test) if self.data_split[2] > 0 else None
+        test_set = Subset(self.dataset, idx_test) if test_size > 0 else None
 
         return train_set, valid_set, test_set
 
@@ -110,7 +111,11 @@ class DataloaderModule:
         )
 
         train, valid, test = self.train_val_test_split(shuffle=False)
-        self.train = DataLoader(dataset=train, batch_size=self.batch_size, shuffle=True)
+        self.train = (
+            DataLoader(dataset=train, batch_size=self.batch_size, shuffle=True)
+            if train is not None
+            else None
+        )
         self.valid = (
             DataLoader(dataset=valid, batch_size=self.batch_size, shuffle=False)
             if valid is not None
@@ -124,7 +129,7 @@ class DataloaderModule:
 
         print(
             "INFO: train size: {}, validation size: {}, testing sizes: {}".format(
-                len(self.train.dataset),
+                len(self.train.dataset if train is not None else []),
                 len(self.valid.dataset if valid is not None else []),
                 len(self.test.dataset if test is not None else []),
             )
