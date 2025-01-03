@@ -1,10 +1,11 @@
 import yaml
 import mlflow.pytorch
 from pathlib import Path
+from lightning.pytorch.loggers import MLFlowLogger
 
 
-class Configs:
-    def __init__(self, config_source):
+class ExperimentConfigs:
+    def __init__(self, config_source, mlflow_logger=None):
         if isinstance(config_source, str):
             with open(config_source, "r") as f:
                 config_dict = yaml.safe_load(f)
@@ -16,10 +17,23 @@ class Configs:
 
         self._set_attributes(config_dict)  # set attributes recursively
 
+        if mlflow_logger:
+            self.mlflow_logger = MLFlowLogger(**self.experiment.logger.to_dict())
+            self.mlflow_logger.log_hyperparams(self.flatten_dict())
+            run_name, artifact_dir = get_run_info(
+                run_id=self.mlflow_logger.run_id,
+                experiment_id=self.mlflow_logger.experiment_id,
+            )
+            self.experiment.checkpoints.dirpath = artifact_dir / "checkpoints"
+            self.experiment.logger.run_name = run_name
+            self.experiment.logger.experiment_id = self.mlflow_logger.experiment_id
+            self.experiment.logger.run_id = self.mlflow_logger.run_id
+            self.experiment.logger.print()
+
     def _set_attributes(self, config_dict):
         for key, value in config_dict.items():
             if isinstance(value, dict):  # create a sub-config object
-                sub_config = Configs(value)
+                sub_config = ExperimentConfigs(value)
                 setattr(self, key, sub_config)
             else:
                 setattr(self, key, value)
@@ -30,11 +44,18 @@ class Configs:
         """
         config_dict = {}
         for key, value in self.__dict__.items():
-            if isinstance(value, Configs):
+            if isinstance(value, ExperimentConfigs):
                 config_dict[key] = value.to_dict()
             else:
                 config_dict[key] = value
+
         return config_dict
+
+    def delete(self, key):
+        """
+        Deletes a key from the configuration.
+        """
+        delattr(self, key)
 
     def print(self):
         """
@@ -43,6 +64,12 @@ class Configs:
         config_dict = self.to_dict()
         self._print_dict(config_dict)
 
+    def clone(self):
+        """
+        Clones the configuration.
+        """
+        return ExperimentConfigs(self.to_dict())
+    
     def _print_dict(self, config_dict, indent=0):
         """
         Helper method to recursively print the config dictionary.
@@ -54,33 +81,6 @@ class Configs:
                 self._print_dict(value, indent + 4)
             else:
                 print(f"{prefix}{key}: {value}")
-
-    def log_config(self, logger):
-        """
-        Logs the configuration parameters using the provided logger.
-        """
-        config_dict = self.to_dict()
-        self._log_dict(config_dict, logger)
-
-    def _log_dict(self, config_dict, logger, indent=0):
-        """
-        Helper method to recursively log the config dictionary.
-        """
-        for key, value in config_dict.items():
-            prefix = " " * indent
-            if isinstance(value, dict):
-                logger.logfile.info(f"{prefix}{key}:")
-                self._log_dict(value, logger, indent + 4)
-            else:
-                logger.logfile.info(f"{prefix}{key}: {value}")
-
-    def save(self, path):
-        """
-        Saves the configuration parameters to a YAML file.
-        """
-        config_dict = self.to_dict()
-        with open(path, "w") as f:
-            yaml.dump(config_dict, f, default_flow_style=False)
 
     def flatten_dict(self):
         """
