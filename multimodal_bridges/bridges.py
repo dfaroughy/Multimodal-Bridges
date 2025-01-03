@@ -16,7 +16,7 @@ class LinearUniformBridge:
     """
 
     def __init__(self, config: dataclass):
-        self.sigma = config.dynamics.params.sigma
+        self.sigma = config.model.params.sigma
 
     def sample(self, t, x0, x1):
         x = t * x1 + (1.0 - t) * x0
@@ -51,7 +51,7 @@ class SchrodingerBridge:
     """
 
     def __init__(self, config: dataclass):
-        self.sigma = config.dynamics.params.sigma
+        self.sigma = config.model.params.sigma
 
     def sample(self, t, x0, x1):
         x = t * x1 + (1.0 - t) * x0
@@ -86,8 +86,8 @@ class TelegraphBridge:
     """
 
     def __init__(self, config: dataclass):
-        self.gamma = config.dynamics.params.gamma
-        self.time_epsilon = config.pipeline.time_eps
+        self.gamma = config.model.params.gamma
+        self.time_epsilon = config.model.pipeline.time_eps
         self.vocab_size = config.data.vocab_size.features
 
     def sample(self, t, k0, k1):

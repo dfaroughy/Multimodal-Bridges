@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
-from models.utils import InputEmbeddings
+from models.utils import EncoderEmbeddings
 
 class MultiModalEPiC(nn.Module):
     """Permutation equivariant architecture for multi-modal continuous-discrete models"""
@@ -14,7 +14,7 @@ class MultiModalEPiC(nn.Module):
         self.dim_features_discrete = config.data.dim.features_discrete
         self.vocab_size = config.data.vocab_size.features
         self.epic = EPiC(config)
-        self.add_discrete_head = config.model.add_discrete_head
+        self.add_discrete_head = config.model.encoder.add_discrete_head
         if self.add_discrete_head:
             self.fc_layer = nn.Sequential(
                 nn.Linear(
@@ -62,22 +62,22 @@ class EPiC(nn.Module):
         self.vocab_size = config.data.vocab_size.features
 
         # ...embedding dimensions:
-        dim_time_emb = config.model.dim.emb_time
+        dim_time_emb = config.model.encoder.dim.emb_time
         dim_features_continuous_emb = (
-            config.model.dim.emb_features_continuous
-            if config.model.dim.emb_features_continuous
+            config.model.encoder.dim.emb_features_continuous
+            if config.model.encoder.dim.emb_features_continuous
             else self.dim_features_continuous
         )
-        dim_features_discrete_emb = config.model.dim.emb_features_discrete
+        dim_features_discrete_emb = config.model.encoder.dim.emb_features_discrete
         dim_context_continuous_emb = (
-            config.model.dim.emb_context_continuous
-            if config.model.dim.emb_context_continuous
+            config.model.encoder.dim.emb_context_continuous
+            if config.model.encoder.dim.emb_context_continuous
             else dim_context_continuous
         )
-        dim_context_discrete_emb = config.model.dim.emb_context_discrete
+        dim_context_discrete_emb = config.model.encoder.dim.emb_context_discrete
 
         # ...components:
-        self.embedding = InputEmbeddings(config)
+        self.embedding = EncoderEmbeddings(config)
         self.epic = EPiCNetwork(
             dim_input=dim_time_emb
             + dim_features_continuous_emb
@@ -87,10 +87,10 @@ class EPiC(nn.Module):
             dim_context=dim_time_emb
             + dim_context_continuous_emb
             + dim_context_discrete_emb,
-            num_blocks=config.model.num_blocks,
-            dim_hidden_local=config.model.dim.hidden_local,
-            dim_hidden_global=config.model.dim.hidden_glob,
-            use_skip_connection=config.model.skip_connection,
+            num_blocks=config.model.encoder.num_blocks,
+            dim_hidden_local=config.model.encoder.dim.hidden_local,
+            dim_hidden_global=config.model.encoder.dim.hidden_glob,
+            use_skip_connection=config.model.encoder.skip_connection,
         )
 
     def forward(
