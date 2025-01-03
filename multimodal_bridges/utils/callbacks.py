@@ -402,6 +402,5 @@ class JetsGenerativeCallback(Callback):
 
         plt.legend(fontsize=7)
         plt.tight_layout()
-        plt.savefig("results_plots.png")
         mlflow.log_artifact("results_plots.png", artifact_path="plots")
         plt.show()

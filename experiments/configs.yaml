@@ -1,17 +1,65 @@
 #...General experiment parameters
-mlflow:
-  experiment_name: multimodal_bridge_matching
-  tracking_uri: /home/df630/Multimodal-Bridges/experiments/results/mlruns
 
- #...Dynamics parameters
+experiment:
+  logger:
+    tracking_uri: /home/df630/Multimodal-Bridges/experiments/results/mlruns
+    experiment_name: multimodal_bridge_aoj
 
-dynamics: 
+  progress_bar:
+    description: green_yellow
+    progress_bar: green1
+    progress_bar_finished: green1
+    progress_bar_pulse: '#6206E0'
+    batch_progress: green_yellow
+    time: grey82
+    processing_speed: grey82
+    metrics: grey82
+    metrics_text_delimiter: '\n'
+    metrics_format: '.3e'
+
+  checkpoints:
+    dirpath: null
+    filename: "best-{epoch:02d}-{val_loss:.4f}"
+    monitor: val_loss      
+    mode: min            
+    save_top_k: 10     
+    save_last: true
+
+ #...Dynamical model parameters
+
+model: 
   bridge_continuous: LinearUniformBridge
   bridge_discrete: TelegraphBridge
   params:
     sigma: 0.0001
     gamma: 0.1
-    loss_weights: fixed
+    loss_weights: learnable
+
+  encoder: 
+    name: MultiModalEPiC
+    num_blocks: 12
+    embeddings:
+      time: SinusoidalPositionalEncoding
+      features_continuous: Linear
+      features_discrete: Embedding
+      context_continuous: null
+      context_discrete: null
+    dim:
+      emb_time: 32
+      emb_features_continuous: 32
+      emb_features_discrete: 32
+      emb_context_continuous: 0
+      emb_context_discrete: 0
+      hidden_local: 200
+      hidden_glob: 32
+    skip_connection: true
+    dropout: 0.1
+    activation: SELU
+    add_discrete_head: true
+
+  pipeline:
+    num_timesteps: 1000
+    time_eps: 0.0001
 
 #...Data parameters
 
@@ -21,13 +69,14 @@ data:
     path:
       - /home/df630/CMB/data/AOJ/2016H_job0.h5
       - /home/df630/CMB/data/AOJ/2016H_job1.h5
+      - /home/df630/CMB/data/AOJ/2016H_job2.h5
       - /home/df630/CMB/data/AOJ/2016H_job3.h5
       - /home/df630/CMB/data/AOJ/2016H_job4.h5
       - /home/df630/CMB/data/AOJ/2016H_job5.h5
     params:
       min_num_particles: 0
       max_num_particles: 128
-      num_jets: 200_000
+      num_jets: 300_000
     preprocess:
       continuous: standardize
       discrete: tokens
@@ -53,52 +102,16 @@ data:
     features: 8 
     context: 0  
 
-#...Model parameters
-
-model: 
-  name: MultiModalEPiC
-  num_blocks: 10
-  dim:
-    emb_time: 16
-    emb_features_continuous: 16
-    emb_features_discrete: 16
-    emb_context_continuous: 0
-    emb_context_discrete: 0
-    hidden_local: 128
-    hidden_glob: 16
-
-  embedding:
-    time: SinusoidalPositionalEncoding
-    features_continuous: Linear
-    features_discrete: Embedding
-    context_continuous: null
-    context_discrete: null
-
-  skip_connection: true
-  dropout: 0.1
-  activation: SELU
-  add_discrete_head: true
-
-#...Pipeline generation parameters
-
-pipeline:
-  num_timesteps: 1000
-  time_eps: 0.0001
-
 #...Training parameters
 
 train:
   batch_size: 1024
   data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
-  epochs: 500
-  monitor: val_loss      # mlflow
-  mode: min              # mlflow
-  save_top_k: 10         # mlflow
-
+  max_epochs: 1000
   optimizer:
     name: AdamW
     params:
-      lr: 0.001
+      lr: 0.001 
       weight_decay: 5.0e-5
       betas: [0.9, 0.999]
       eps: 1.e-8
@@ -107,8 +120,7 @@ train:
   scheduler: 
     name: CosineAnnealingLR
     params: 
-      T_max: 500
-      eta_min: 5.0e-5
+      T_max: 1000
+      eta_min: 1.0e-4
       last_epoch: -1
-
 

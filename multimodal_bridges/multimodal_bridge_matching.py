@@ -23,16 +23,23 @@ class HybridState:
 
     def to(self, device: str):
         return self._apply(lambda tensor: tensor.to(device))
+
     def detach(self):
         return self._apply(lambda tensor: tensor.detach())
+
     def cpu(self):
         return self._apply(lambda tensor: tensor.cpu())
+
     def clone(self):
         return self._apply(lambda tensor: tensor.clone())
-    
+
     @property
     def device(self):
-        return self.continuous.device if self.continuous is not None else self.discrete.device
+        return (
+            self.continuous.device
+            if self.continuous is not None
+            else self.discrete.device
+        )
 
     @staticmethod
     def cat(states: List["HybridState"], dim=0) -> "HybridState":
@@ -49,16 +56,19 @@ class HybridState:
             discrete=cat_attr("discrete"),
             mask=cat_attr("mask"),
         )
-    
+
     def _apply(self, func):
-        """Utility function to apply a transformation function to all attributes."""
+        """apply transformation function to all attributes."""
         return HybridState(
             time=func(self.time) if isinstance(self.time, torch.Tensor) else None,
-            continuous=func(self.continuous) if isinstance(self.continuous, torch.Tensor) else None,
-            discrete=func(self.discrete) if isinstance(self.discrete, torch.Tensor) else None,
+            continuous=func(self.continuous)
+            if isinstance(self.continuous, torch.Tensor)
+            else None,
+            discrete=func(self.discrete)
+            if isinstance(self.discrete, torch.Tensor)
+            else None,
             mask=func(self.mask) if isinstance(self.mask, torch.Tensor) else None,
         )
-
 
 
 @dataclass
@@ -120,7 +130,9 @@ class MultiModalBridgeMatching(L.LightningModule):
         mask = batch.target_mask
         return HybridState(time, continuous, discrete, mask)
 
-    def loss_continuous(self, heads: MultiHeadOutput, state: HybridState, batch) -> torch.Tensor:
+    def loss_continuous(
+        self, heads: MultiHeadOutput, state: HybridState, batch
+    ) -> torch.Tensor:
         """mean square error loss for drift matching"""
         if hasattr(self, "bridge_continuous"):
             vector = heads.continuous
@@ -135,7 +147,9 @@ class MultiModalBridgeMatching(L.LightningModule):
         else:
             return torch.tensor(0.0, device=self.device)
 
-    def loss_discrete(self, heads: MultiHeadOutput, state: HybridState, batch) -> torch.Tensor:
+    def loss_discrete(
+        self, heads: MultiHeadOutput, state: HybridState, batch
+    ) -> torch.Tensor:
         """cross-entropy loss for discrete state classifier"""
         if hasattr(self, "bridge_discrete"):
             logits = heads.discrete.reshape(-1, self.vocab_size)
@@ -195,9 +209,15 @@ class MultiModalBridgeMatching(L.LightningModule):
         weights = self.loss_multihead.get_weights()
         return {"loss": loss, "loss_individual": loss_individual, "weights": weights}
 
-    def predict_step(self, batch, batch_idx) -> Tuple[HybridState, HybridState, HybridState]:
-        source_state = HybridState(None, batch.source_continuous, batch.source_discrete, batch.source_mask)
-        target_state = HybridState(None, batch.target_continuous, batch.target_discrete, batch.target_mask)
+    def predict_step(
+        self, batch, batch_idx
+    ) -> Tuple[HybridState, HybridState, HybridState]:
+        source_state = HybridState(
+            None, batch.source_continuous, batch.source_discrete, batch.source_mask
+        )
+        target_state = HybridState(
+            None, batch.target_continuous, batch.target_discrete, batch.target_mask
+        )
         initial_state = source_state.clone()
         final_state = self.simulate_dynamics(initial_state, batch)
         return final_state, source_state.detach().cpu(), target_state.detach().cpu()
@@ -231,15 +251,8 @@ class MultiHeadLoss(nn.Module):
                 torch.exp(-self.weights[i]) * losses[i] + self.weights[i]
                 for i in range(len(losses))
             )
-            # individual_losses = [
-            #     torch.exp(-self.weights[i]).item() * losses[i].item()
-            #     for i in range(len(losses))
-            # ]
         elif self.mode == "fixed":
             combined_loss = sum(self.weights[i] * losses[i] for i in range(len(losses)))
-            # individual_losses = [
-            #     self.weights[i] * losses[i].item() for i in range(len(losses))
-            # ]
         return combined_loss, losses
 
     def get_weights(self) -> List[float]:
