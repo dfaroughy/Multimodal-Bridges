@@ -17,18 +17,20 @@ class ExperimentConfigs:
 
         self._set_attributes(config_dict)  # set attributes recursively
 
-        if mlflow_logger:
-            self.mlflow_logger = MLFlowLogger(**self.experiment.logger.to_dict())
-            self.mlflow_logger.log_hyperparams(self.flatten_dict())
-            run_name, artifact_dir = get_run_info(
-                run_id=self.mlflow_logger.run_id,
-                experiment_id=self.mlflow_logger.experiment_id,
-            )
-            self.experiment.checkpoints.dirpath = artifact_dir / "checkpoints"
-            self.experiment.logger.run_name = run_name
-            self.experiment.logger.experiment_id = self.mlflow_logger.experiment_id
-            self.experiment.logger.run_id = self.mlflow_logger.run_id
-            self.experiment.logger.print()
+        # if mlflow_logger:
+        #     self.mlflow_logger = MLFlowLogger(**self.experiment.logger.to_dict())
+        #     self.mlflow_logger.log_hyperparams(self.flatten_dict())
+        #     print('run id:', self.mlflow_logger.run_id)
+        #     print('experiment id:',self.mlflow_logger.experiment_id)
+        #     run_name, artifact_dir = get_run_info(
+        #         run_id=self.mlflow_logger.run_id,
+        #         experiment_id=self.mlflow_logger.experiment_id,
+        #     )
+        #     self.experiment.checkpoints.dirpath = artifact_dir / "checkpoints"
+        #     self.experiment.logger.run_name = run_name
+        #     self.experiment.logger.experiment_id = self.mlflow_logger.experiment_id
+        #     self.experiment.logger.run_id = self.mlflow_logger.run_id
+        #     self.experiment.logger.print()
 
     def _set_attributes(self, config_dict):
         for key, value in config_dict.items():
@@ -71,9 +73,6 @@ class ExperimentConfigs:
         return ExperimentConfigs(self.to_dict())
     
     def _print_dict(self, config_dict, indent=0):
-        """
-        Helper method to recursively print the config dictionary.
-        """
         for key, value in config_dict.items():
             prefix = " " * indent
             if isinstance(value, dict):
@@ -100,19 +99,19 @@ class ExperimentConfigs:
         return _flatten_dict(self.to_dict())
 
 
-def get_run_info(experiment_id=None, run_id=None, experiment_name=None, run_name=None):
-    """Returns `run_name` or `run_id` and articfact directory for a given run."""
-    client = mlflow.tracking.MlflowClient()
-    info = {}
-    if run_id and experiment_id:
-        for run in client.search_runs(experiment_ids=[experiment_id]):
-            info[run.info.run_id] = (run.info.run_name, Path(run.info.artifact_uri))
-        return info[run_id]
-    elif run_name and experiment_name:
-        experiment = client.get_experiment_by_name(experiment_name)
-        experiment_id = experiment.experiment_id
-        for run in client.search_runs(experiment_ids=[experiment_id]):
-            info[run.info.run_name] = (run.info.run_id, Path(run.info.artifact_uri))
-        return info[run_name]
-    else:
-        return None
+# def get_run_info(experiment_id=None, run_id=None, experiment_name=None, run_name=None):
+#     """Returns `run_name` or `run_id` and articfact directory for a given run."""
+#     client = mlflow.tracking.MlflowClient()
+#     info = {}
+#     if run_id and experiment_id:
+#         for run in client.search_runs(experiment_ids=[experiment_id]):
+#             info[run.info.run_id] = (run.info.run_name, Path(run.info.artifact_uri))
+#         return info[run_id]
+#     elif run_name and experiment_name:
+#         experiment = client.get_experiment_by_name(experiment_name)
+#         experiment_id = experiment.experiment_id
+#         for run in client.search_runs(experiment_ids=[experiment_id]):
+#             info[run.info.run_name] = (run.info.run_id, Path(run.info.artifact_uri))
+#         return info[run_name]
+#     else:
+#         return None

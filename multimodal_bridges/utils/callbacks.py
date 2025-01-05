@@ -16,24 +16,16 @@ class MetricLoggerCallback(Callback):
     Custom MLflow Callback to handle logging and saving checkpoints as MLflow artifacts.
     """
 
-    def __init__(self):
+    def __init__(self, sync_dist=False):
         super().__init__()
+        self.sync_dist = sync_dist
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         """
         Logs metrics at the end of each training batch.
         """
         if outputs is not None:
-            loss = outputs["loss"]
-            loss_0 = outputs["loss_individual"][0]
-            loss_1 = outputs["loss_individual"][1]
-            weights_0 = outputs["weights"][0]
-            weights_1 = outputs["weights"][1]
-            pl_module.log("train_loss", loss, on_epoch=True)
-            pl_module.log("train_loss_continuous", loss_0, on_epoch=True)
-            pl_module.log("train_loss_discrete", loss_1, on_epoch=True)
-            pl_module.log("train_weights_continuous", weights_0, on_epoch=True)
-            pl_module.log("train_weights_discrete", weights_1, on_epoch=True)
+            pl_module.log("train_loss", outputs, on_epoch=True, sync_dist=self.sync_dist)
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         """
@@ -45,11 +37,25 @@ class MetricLoggerCallback(Callback):
             loss_1 = outputs["loss_individual"][1]
             weights_0 = outputs["weights"][0]
             weights_1 = outputs["weights"][1]
-            pl_module.log("val_loss", loss, on_epoch=True)
-            pl_module.log("val_loss_continuous", loss_0, on_epoch=True)
-            pl_module.log("val_loss_discrete", loss_1, on_epoch=True)
-            pl_module.log("val_weights_continuous", weights_0, on_epoch=True)
-            pl_module.log("val_weights_discrete", weights_1, on_epoch=True)
+            pl_module.log("val_loss", loss, on_epoch=True, sync_dist=self.sync_dist)
+            pl_module.log(
+                "val_loss_continuous", loss_0, on_epoch=True, sync_dist=self.sync_dist
+            )
+            pl_module.log(
+                "val_loss_discrete", loss_1, on_epoch=True, sync_dist=self.sync_dist
+            )
+            pl_module.log(
+                "val_weights_continuous",
+                weights_0,
+                on_epoch=True,
+                sync_dist=self.sync_dist,
+            )
+            pl_module.log(
+                "val_weights_discrete",
+                weights_1,
+                on_epoch=True,
+                sync_dist=self.sync_dist,
+            )
 
 
 class JetsGenerativeCallback(Callback):
@@ -74,29 +80,36 @@ class JetsGenerativeCallback(Callback):
             self.batched_target_states.append(outputs[2])
 
     def on_predict_end(self, trainer, pl_module):
-        
-        #...generated sample
+        # ...generated sample
         gen_sample = HybridState.cat(self.batched_gen_states)
         gen_sample = ParticleClouds(dataset=gen_sample)
         gen_sample.stats = self.config.data.target.preprocess.stats.to_dict()
         gen_sample.postprocess()
         gen_jets = JetClassHighLevelFeatures(constituents=gen_sample)
-        
-        #...test sample
+
+        # ...test sample
         test_sample = HybridState.cat(self.batched_target_states)
         test_sample = ParticleClouds(dataset=test_sample)
         test_jets = JetClassHighLevelFeatures(constituents=test_sample)
-        
-        #...results
+
+        # ...results
         self.plot_histograms(gen_jets, test_jets)
         self.compute_performance_metrics(gen_jets, test_jets)
         mlflow.end_run()
 
     def compute_performance_metrics(self, gen_jets, test_jets):
-        mlflow.log_metric("Wasserstein1D_pt", f"{test_jets.Wassertein1D('pt', gen_jets):3f}")
-        mlflow.log_metric("Wasserstein1D_mass", f"{test_jets.Wassertein1D('m', gen_jets):3f}")
-        mlflow.log_metric("Wasserstein1D_tau21", f"{test_jets.Wassertein1D('tau21', gen_jets):3f}")
-        mlflow.log_metric("Wasserstein1D_d2", f"{test_jets.Wassertein1D('d2', gen_jets):3f}")
+        mlflow.log_metric(
+            "Wasserstein1D_pt", f"{test_jets.Wassertein1D('pt', gen_jets):3f}"
+        )
+        mlflow.log_metric(
+            "Wasserstein1D_mass", f"{test_jets.Wassertein1D('m', gen_jets):3f}"
+        )
+        mlflow.log_metric(
+            "Wasserstein1D_tau21", f"{test_jets.Wassertein1D('tau21', gen_jets):3f}"
+        )
+        mlflow.log_metric(
+            "Wasserstein1D_d2", f"{test_jets.Wassertein1D('d2', gen_jets):3f}"
+        )
 
     def plot_histograms(self, gen_jets, test_jets):
         _, ax = plt.subplots(4, 4, figsize=(15, 12))
@@ -402,5 +415,6 @@ class JetsGenerativeCallback(Callback):
 
         plt.legend(fontsize=7)
         plt.tight_layout()
-        mlflow.log_artifact("results_plots.png", artifact_path="plots")
         plt.show()
+        plt.savefig("results_plots.png")
+        mlflow.log_artifact("results_plots.png", artifact_path="plots")

@@ -97,8 +97,8 @@ class MultiModalBridgeMatching(L.LightningModule):
             self.bridge_discrete = Bridge[config.model.bridge_discrete](config)
             self.loss_discrete_fn = nn.CrossEntropyLoss(reduction="none")
 
-        self.loss_multihead = MultiHeadLoss(mode=config.model.params.loss_weights)
-        self.save_hyperparameters()
+        self.loss_multihead = MultiModalLoss(mode=config.model.params.loss_weights)
+        # self.save_hyperparameters()
 
     def forward(self, state: HybridState, batch) -> MultiHeadOutput:
         continuous, discrete = self.encoder(
@@ -195,9 +195,8 @@ class MultiModalBridgeMatching(L.LightningModule):
         heads = self.forward(state, batch)
         loss_0 = self.loss_continuous(heads, state, batch)
         loss_1 = self.loss_discrete(heads, state, batch)
-        loss, loss_individual = self.loss_multihead([loss_0, loss_1])
-        weights = self.loss_multihead.get_weights()
-        return {"loss": loss, "loss_individual": loss_individual, "weights": weights}
+        loss, _= self.loss_multihead([loss_0, loss_1])
+        return loss
 
     def validation_step(self, batch, batch_idx) -> Dict[str, torch.Tensor]:
         state = self.sample_bridges(batch)
@@ -230,7 +229,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         return [optimizer], [scheduler]
 
 
-class MultiHeadLoss(nn.Module):
+class MultiModalLoss(nn.Module):
     """
     Combines multiple losses with learnable weights.
     The weights are directly parameterized in the weight space (w = 1 / sigma^2).
