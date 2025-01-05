@@ -25,7 +25,40 @@ class MetricLoggerCallback(Callback):
         Logs metrics at the end of each training batch.
         """
         if outputs is not None:
-            pl_module.log("train_loss", outputs, on_epoch=True, sync_dist=self.sync_dist)
+            loss = outputs["loss"]
+            loss_0 = outputs["loss_individual"][0]
+            loss_1 = outputs["loss_individual"][1]
+            weights_0 = outputs["weights"][0]
+            weights_1 = outputs["weights"][1]
+            pl_module.log(
+                "train_loss", 
+                loss, 
+                on_epoch=True, 
+                sync_dist=self.sync_dist)
+            pl_module.log(
+                "train_loss_continuous", 
+                loss_0, 
+                on_epoch=True, 
+                sync_dist=self.sync_dist
+            )
+            pl_module.log(
+                "train_loss_discrete", 
+                loss_1, 
+                on_epoch=True, 
+                sync_dist=self.sync_dist
+            )
+            pl_module.log(
+                "train_weights_continuous",
+                weights_0,
+                on_epoch=True,
+                sync_dist=self.sync_dist,
+            )
+            pl_module.log(
+                "train_weights_discrete",
+                weights_1,
+                on_epoch=True,
+                sync_dist=self.sync_dist,
+            )
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         """
@@ -37,12 +70,22 @@ class MetricLoggerCallback(Callback):
             loss_1 = outputs["loss_individual"][1]
             weights_0 = outputs["weights"][0]
             weights_1 = outputs["weights"][1]
-            pl_module.log("val_loss", loss, on_epoch=True, sync_dist=self.sync_dist)
             pl_module.log(
-                "val_loss_continuous", loss_0, on_epoch=True, sync_dist=self.sync_dist
+                "val_loss", 
+                loss, 
+                on_epoch=True, 
+                sync_dist=self.sync_dist)
+            pl_module.log(
+                "val_loss_continuous", 
+                loss_0, 
+                on_epoch=True, 
+                sync_dist=self.sync_dist
             )
             pl_module.log(
-                "val_loss_discrete", loss_1, on_epoch=True, sync_dist=self.sync_dist
+                "val_loss_discrete", 
+                loss_1, 
+                on_epoch=True, 
+                sync_dist=self.sync_dist
             )
             pl_module.log(
                 "val_weights_continuous",
