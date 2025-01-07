@@ -69,8 +69,18 @@ class HybridState:
             else None,
             mask=func(self.mask) if isinstance(self.mask, torch.Tensor) else None,
         )
-
-
+    
+    def save_to(self, file_path):
+        with h5py.File(file_path, "w") as f:
+            if self.time is not None:
+                f.create_dataset("time", data=self.time.cpu().numpy())
+            if self.continuous is not None:
+                f.create_dataset("continuous", data=self.continuous.cpu().numpy())
+            if self.discrete is not None:
+                f.create_dataset("discrete", data=self.discrete.cpu().numpy())
+            if self.mask is not None:
+                f.create_dataset("mask", data=self.mask.cpu().numpy())
+                
 @dataclass
 class MultiHeadOutput:
     """model output heads"""

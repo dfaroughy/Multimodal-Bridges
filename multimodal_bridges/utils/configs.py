@@ -1,11 +1,8 @@
 import yaml
-import mlflow.pytorch
-from pathlib import Path
-from lightning.pytorch.loggers import MLFlowLogger
-
+import os
 
 class ExperimentConfigs:
-    def __init__(self, config_source, mlflow_logger=None):
+    def __init__(self, config_source):
         if isinstance(config_source, str):
             with open(config_source, "r") as f:
                 config_dict = yaml.safe_load(f)
@@ -16,21 +13,6 @@ class ExperimentConfigs:
             raise ValueError("config_source must be a file path or a dictionary")
 
         self._set_attributes(config_dict)  # set attributes recursively
-
-        # if mlflow_logger:
-        #     self.mlflow_logger = MLFlowLogger(**self.experiment.logger.to_dict())
-        #     self.mlflow_logger.log_hyperparams(self.flatten_dict())
-        #     print('run id:', self.mlflow_logger.run_id)
-        #     print('experiment id:',self.mlflow_logger.experiment_id)
-        #     run_name, artifact_dir = get_run_info(
-        #         run_id=self.mlflow_logger.run_id,
-        #         experiment_id=self.mlflow_logger.experiment_id,
-        #     )
-        #     self.experiment.checkpoints.dirpath = artifact_dir / "checkpoints"
-        #     self.experiment.logger.run_name = run_name
-        #     self.experiment.logger.experiment_id = self.mlflow_logger.experiment_id
-        #     self.experiment.logger.run_id = self.mlflow_logger.run_id
-        #     self.experiment.logger.print()
 
     def _set_attributes(self, config_dict):
         for key, value in config_dict.items():
@@ -52,6 +34,15 @@ class ExperimentConfigs:
                 config_dict[key] = value
 
         return config_dict
+
+    def save(self, path, name='config.yaml'):
+        """
+        Saves the configuration parameters to a YAML file.
+        """
+        path = os.join(path, name)
+        config_dict = self.to_dict()
+        with open(path, "w") as f:
+            yaml.dump(config_dict, f, default_flow_style=False)
 
     def delete(self, key):
         """
@@ -80,38 +71,3 @@ class ExperimentConfigs:
                 self._print_dict(value, indent + 4)
             else:
                 print(f"{prefix}{key}: {value}")
-
-    def flatten_dict(self):
-        """
-        Flattens the configuration into a single-level dictionary with dot-separated keys.
-        """
-
-        def _flatten_dict(d, parent_key="", sep="."):
-            items = []
-            for k, v in d.items():
-                new_key = f"{parent_key}{sep}{k}" if parent_key else k
-                if isinstance(v, dict):
-                    items.extend(_flatten_dict(v, new_key, sep=sep).items())
-                else:
-                    items.append((new_key, v))
-            return dict(items)
-
-        return _flatten_dict(self.to_dict())
-
-
-# def get_run_info(experiment_id=None, run_id=None, experiment_name=None, run_name=None):
-#     """Returns `run_name` or `run_id` and articfact directory for a given run."""
-#     client = mlflow.tracking.MlflowClient()
-#     info = {}
-#     if run_id and experiment_id:
-#         for run in client.search_runs(experiment_ids=[experiment_id]):
-#             info[run.info.run_id] = (run.info.run_name, Path(run.info.artifact_uri))
-#         return info[run_id]
-#     elif run_name and experiment_name:
-#         experiment = client.get_experiment_by_name(experiment_name)
-#         experiment_id = experiment.experiment_id
-#         for run in client.search_runs(experiment_ids=[experiment_id]):
-#             info[run.info.run_name] = (run.info.run_id, Path(run.info.artifact_uri))
-#         return info[run_name]
-#     else:
-#         return None
