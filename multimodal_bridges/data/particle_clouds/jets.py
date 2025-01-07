@@ -15,10 +15,10 @@ vector.register_awkward()
 from data.particle_clouds.particles import ParticleClouds
 
 
-class JetDataclass:
+class JetDataModule:
     """class that prepares the source-target coupling"""
 
-    def __init__(self, config):
+    def __init__(self, config, preprocess=False):
         self.config = config
         kwargs_target = config.data.target.params.to_dict()
         kwargs_source = config.data.source.params.to_dict()
@@ -49,6 +49,9 @@ class JetDataclass:
             data_paths=getattr(config.data.source, "path", None),
             **kwargs_source,
         )
+        
+        if preprocess:
+            self.preprocess()
 
     def preprocess(self, source_stats=None, target_stats=None):
         if hasattr(self.config.data.source, "preprocess"):

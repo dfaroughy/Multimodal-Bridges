@@ -63,11 +63,11 @@ class DataSetModule(Dataset):
 
 class DataloaderModule:
     def __init__(
-        self, config, dataclass, batch_size: int = None, data_split_frac: tuple = None
+        self, config, datamodule, batch_size: int = None, data_split_frac: tuple = None
     ):
-        self.dataclass = dataclass
+        self.datamodule = datamodule
         self.config = config
-        self.dataset = DataSetModule(dataclass)
+        self.dataset = DataSetModule(datamodule)
         self.data_split = (
             self.config.train.data_split_frac
             if data_split_frac is None
