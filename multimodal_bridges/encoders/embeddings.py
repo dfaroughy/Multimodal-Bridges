@@ -19,9 +19,13 @@ class EncoderEmbeddings(nn.Module):
 
         # ...embedding types:
         embed_type_time = config.model.encoder.embeddings.time
-        embed_type_features_continuous = config.model.encoder.embeddings.features_continuous
+        embed_type_features_continuous = (
+            config.model.encoder.embeddings.features_continuous
+        )
         embed_type_features_discrete = config.model.encoder.embeddings.features_discrete
-        embed_type_context_continuous = config.model.encoder.embeddings.context_continuous
+        embed_type_context_continuous = (
+            config.model.encoder.embeddings.context_continuous
+        )
         embed_type_context_discrete = config.model.encoder.embeddings.context_discrete
 
         # ...embedding dimensions:

@@ -1,8 +1,9 @@
-import os
-import tempfile
-import mlflow
-import matplotlib.pyplot as plt
+from comet_ml import ExistingExperiment
 
+import os
+import json
+from pathlib import Path
+import matplotlib.pyplot as plt
 from lightning.pytorch.callbacks import Callback
 
 from multimodal_bridge_matching import HybridState
@@ -30,22 +31,12 @@ class MetricLoggerCallback(Callback):
             loss_1 = outputs["loss_individual"][1]
             weights_0 = outputs["weights"][0]
             weights_1 = outputs["weights"][1]
+            pl_module.log("train_loss", loss, on_epoch=True, sync_dist=self.sync_dist)
             pl_module.log(
-                "train_loss", 
-                loss, 
-                on_epoch=True, 
-                sync_dist=self.sync_dist)
-            pl_module.log(
-                "train_loss_continuous", 
-                loss_0, 
-                on_epoch=True, 
-                sync_dist=self.sync_dist
+                "train_loss_continuous", loss_0, on_epoch=True, sync_dist=self.sync_dist
             )
             pl_module.log(
-                "train_loss_discrete", 
-                loss_1, 
-                on_epoch=True, 
-                sync_dist=self.sync_dist
+                "train_loss_discrete", loss_1, on_epoch=True, sync_dist=self.sync_dist
             )
             pl_module.log(
                 "train_weights_continuous",
@@ -70,22 +61,12 @@ class MetricLoggerCallback(Callback):
             loss_1 = outputs["loss_individual"][1]
             weights_0 = outputs["weights"][0]
             weights_1 = outputs["weights"][1]
+            pl_module.log("val_loss", loss, on_epoch=True, sync_dist=self.sync_dist)
             pl_module.log(
-                "val_loss", 
-                loss, 
-                on_epoch=True, 
-                sync_dist=self.sync_dist)
-            pl_module.log(
-                "val_loss_continuous", 
-                loss_0, 
-                on_epoch=True, 
-                sync_dist=self.sync_dist
+                "val_loss_continuous", loss_0, on_epoch=True, sync_dist=self.sync_dist
             )
             pl_module.log(
-                "val_loss_discrete", 
-                loss_1, 
-                on_epoch=True, 
-                sync_dist=self.sync_dist
+                "val_loss_discrete", loss_1, on_epoch=True, sync_dist=self.sync_dist
             )
             pl_module.log(
                 "val_weights_continuous",
@@ -102,8 +83,6 @@ class MetricLoggerCallback(Callback):
 
 
 class JetsGenerativeCallback(Callback):
-    """Callback to save generated data as MLflow artifacts after prediction."""
-
     def __init__(self, config: ExperimentConfigs):
         super().__init__()
         self.config = config
@@ -112,9 +91,10 @@ class JetsGenerativeCallback(Callback):
         self.batched_target_states = []
 
     def on_predict_start(self, trainer, pl_module):
-        run_id = self.config.experiment.logger.run_id
-        if not mlflow.active_run():
-            mlflow.start_run(run_id=run_id, nested=True)
+        self.data_dir = os.path.join(self.config.experiment.dir_path, "data")
+        self.metric_dir = os.path.join(self.config.experiment.dir_path, "metrics")
+        os.makedirs(self.data_dir, exist_ok=True)
+        os.makedirs(self.metric_dir, exist_ok=True)
 
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
@@ -125,339 +105,236 @@ class JetsGenerativeCallback(Callback):
     def on_predict_end(self, trainer, pl_module):
         # ...generated sample
         gen_sample = HybridState.cat(self.batched_gen_states)
-        gen_sample = ParticleClouds(dataset=gen_sample)
-        gen_sample.stats = self.config.data.target.preprocess.stats.to_dict()
-        gen_sample.postprocess()
-        gen_jets = JetClassHighLevelFeatures(constituents=gen_sample)
+        self.gen_sample = ParticleClouds(dataset=gen_sample)
+        self.gen_sample.stats = self.config.data.target.preprocess.stats.to_dict()
+        self.gen_sample.postprocess()
+        gen_jets = JetClassHighLevelFeatures(constituents=self.gen_sample)
 
         # ...test sample
         test_sample = HybridState.cat(self.batched_target_states)
-        test_sample = ParticleClouds(dataset=test_sample)
-        test_jets = JetClassHighLevelFeatures(constituents=test_sample)
+        self.test_sample = ParticleClouds(dataset=test_sample)
+        test_jets = JetClassHighLevelFeatures(constituents=self.test_sample)
 
-        # ...results
-        self.plot_histograms(gen_jets, test_jets)
-        self.compute_performance_metrics(gen_jets, test_jets)
-        mlflow.end_run()
+        # ...log results
+
+        metrics = self.compute_performance_metrics(gen_jets, test_jets)
+        figs = self.get_results_plots(gen_jets, test_jets)
+        self.log_results(metrics, figs)
+
+    def log_results(self, metrics=None, figures=None):
+        self.gen_sample.save_to(path=os.path.join(self.data_dir, "generated_sample.h5"))
+        self.test_sample.save_to(path=os.path.join(self.data_dir, "test_sample.h5"))
+        with open(os.path.join(self.metric_dir, "performance_metrics.h5"), "w") as f:
+            json.dump(metrics, f, indent=4)
+        if hasattr(self.config.experiment, "comet_logger"):
+            api_key = self.config.experiment.comet_logger.api_key
+            exp_key = self.config.experiment.comet_logger.experiment_key
+            experiment = ExistingExperiment(
+                api_key=api_key, previous_experiment=exp_key
+            )
+            if metrics:
+                experiment.log_metrics(metrics)
+            if figures:
+                for key in figures.keys():
+                    experiment.log_figure(figure=figures[key], figure_name=key)
+            experiment.end()
+        else:
+            pass
 
     def compute_performance_metrics(self, gen_jets, test_jets):
-        mlflow.log_metric(
-            "Wasserstein1D_pt", f"{test_jets.Wassertein1D('pt', gen_jets):3f}"
-        )
-        mlflow.log_metric(
-            "Wasserstein1D_mass", f"{test_jets.Wassertein1D('m', gen_jets):3f}"
-        )
-        mlflow.log_metric(
-            "Wasserstein1D_tau21", f"{test_jets.Wassertein1D('tau21', gen_jets):3f}"
-        )
-        mlflow.log_metric(
-            "Wasserstein1D_d2", f"{test_jets.Wassertein1D('d2', gen_jets):3f}"
+        return {
+            "Wasserstein1D_pt": test_jets.Wassertein1D("pt", gen_jets),
+            "Wasserstein1D_mass": test_jets.Wassertein1D("m", gen_jets),
+            "Wasserstein1D_tau21": test_jets.Wassertein1D("tau21", gen_jets),
+            "Wasserstein1D_tau23": test_jets.Wassertein1D("tau32", gen_jets),
+            "Wasserstein1D_d2": test_jets.Wassertein1D("d2", gen_jets),
+        }
+
+    def get_results_plots(self, gen_jets, test_jets):
+        continuous_plots = {
+            "particle transverse momentum": self.plot_feature(
+                "pt",
+                gen_jets.constituents,
+                test_jets.constituents,
+                xlabel=r"$p_t$ [GeV]",
+                log=True,
+            ),
+            "particle rapidity": self.plot_feature(
+                "eta_rel",
+                gen_jets.constituents,
+                test_jets.constituents,
+                xlabel=r"$\eta^{\rm rel}$",
+                log=True,
+            ),
+            "particle azimuth": self.plot_feature(
+                "phi_rel",
+                gen_jets.constituents,
+                test_jets.constituents,
+                xlabel=r"$\phi^{\rm rel}$",
+                log=True,
+            ),
+            "jet transverse momentum": self.plot_feature(
+                "pt",
+                gen_jets,
+                test_jets,
+                xlabel=r"$p_t$ [GeV]",
+            ),
+            "jet rapidity": self.plot_feature(
+                "eta",
+                gen_jets,
+                test_jets,
+                xlabel=r"$\eta$",
+            ),
+            "jet azimuth": self.plot_feature(
+                "phi",
+                gen_jets,
+                test_jets,
+                xlabel=r"$\phi$",
+            ),
+            "jet mass": self.plot_feature(
+                "m",
+                gen_jets,
+                test_jets,
+                xlabel=r"$m$ [GeV]",
+            ),
+            "energy correlation function": self.plot_feature(
+                "d2",
+                gen_jets,
+                test_jets,
+                xlabel=r"$D_2$",
+            ),
+            "21-subjetiness ratio": self.plot_feature(
+                "tau21",
+                gen_jets,
+                test_jets,
+                xlabel=r"$\tau_{21}$",
+            ),
+            "23-subjetiness ratio": self.plot_feature(
+                "tau32",
+                gen_jets,
+                test_jets,
+                xlabel=r"$\tau_{32}$",
+            ),
+        }
+        discrete_plots = {
+            "total charge": self.plot_feature(
+                "Q_total",
+                gen_jets,
+                test_jets,
+                xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
+                discrete=True,
+            ),
+            "jet charge": self.plot_feature(
+                "Q_jet",
+                gen_jets,
+                test_jets,
+                xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
+            ),
+            "photon multiplicity": self.plot_multiplicity(
+                0,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_\gamma$",
+            ),
+            "neutral hadron multiplicity": self.plot_multiplicity(
+                1,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{\rm h^0}$",
+            ),
+            "negative hadron multiplicity": self.plot_multiplicity(
+                2,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{\rm h^-}$",
+            ),
+            "positive hadron multiplicity": self.plot_multiplicity(
+                2,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{\rm h^+}$",
+            ),
+            "electron multiplicity": self.plot_multiplicity(
+                4,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{e^-}$",
+            ),
+            "positron multiplicity": self.plot_multiplicity(
+                5,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{e^+}$",
+            ),
+            "muon multiplicity": self.plot_multiplicity(
+                6,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{\mu^-}$",
+            ),
+            "antimuon multiplicity": self.plot_multiplicity(
+                7,
+                gen_jets,
+                test_jets,
+                xlabel=r"$N_{\mu^+}$",
+            ),
+        }
+        return (
+            {**continuous_plots, **discrete_plots}
+            if hasattr(test_jets.constituents, "discrete")
+            else continuous_plots
         )
 
-    def plot_histograms(self, gen_jets, test_jets):
-        _, ax = plt.subplots(4, 4, figsize=(15, 12))
-
-        arg_test = dict(
+    def plot_feature(self, feat, gen, test, xlabel=None, log=False, discrete=False):
+        fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+        gen.histplot(
+            feat,
+            xlabel=xlabel,
+            ax=ax,
             stat="density",
-            fill=False,
-            log_scale=(False, False),
-            color="k",
-            lw=1.0,
-            label="AOJ",
-        )
-        arg_gen = dict(
-            stat="density",
-            fill=False,
-            log_scale=(False, False),
             color="crimson",
-            lw=1.0,
+            log_scale=(False, log),
+            fill=False,
+            label="gen",
+            discrete=discrete,
+        )
+        test.histplot(
+            feat,
+            xlabel=xlabel,
+            ax=ax,
+            stat="density",
+            color="k",
+            log_scale=(False, log),
+            fill=False,
+            label="target",
+            discrete=discrete,
+        )
+        plt.legend(fontsize=10)
+        plt.tight_layout()
+        return fig
+
+    def plot_multiplicity(self, state, gen, test, xlabel=None, log=False):
+        fig, ax = plt.subplots(1, 1, figsize=(4, 4))
+        gen.histplot_multiplicities(
+            state,
+            xlabel=xlabel,
+            ax=ax,
+            stat="density",
+            color="crimson",
+            log_scale=(False, log),
+            fill=False,
             label="gen",
         )
-        arg_test_log = dict(
+        test.histplot_multiplicities(
+            state,
+            xlabel=xlabel,
+            ax=ax,
             stat="density",
-            fill=False,
-            log_scale=(False, True),
             color="k",
-            lw=1.0,
-            label="AOJ",
-        )
-        arg_gen_log = dict(
-            stat="density",
+            log_scale=(False, log),
             fill=False,
-            log_scale=(False, True),
-            color="crimson",
-            lw=1.0,
-            label="gen",
+            label="target",
         )
-
-        binrange, binwidth = (0, 500), 5
-        test_jets.constituents.histplot(
-            "pt",
-            binrange=binrange,
-            binwidth=binwidth,
-            xlabel=r"particle $p_t^{\rm rel}$",
-            ax=ax[0, 0],
-            **arg_test_log,
-        )
-        gen_jets.constituents.histplot(
-            "pt",
-            binrange=binrange,
-            binwidth=binwidth,
-            xlabel=r"particle $p_t^{\rm rel}$",
-            ax=ax[0, 0],
-            **arg_gen_log,
-        )
-
-        binrange, binwidth = (-2, 2), 0.04
-        test_jets.constituents.histplot(
-            "eta_rel",
-            binrange=binrange,
-            binwidth=binwidth,
-            xlabel=r"particle $\Delta \eta$",
-            ax=ax[0, 1],
-            **arg_test_log,
-        )
-        gen_jets.constituents.histplot(
-            "eta_rel",
-            binrange=binrange,
-            binwidth=binwidth,
-            xlabel=r"particle $\Delta \eta$",
-            ax=ax[0, 1],
-            **arg_gen_log,
-        )
-
-        binrange, binwidth = (-2, 2), 0.04
-        test_jets.constituents.histplot(
-            "phi_rel",
-            binrange=binrange,
-            binwidth=binwidth,
-            xlabel=r"particle $\Delta \phi$",
-            ax=ax[0, 2],
-            **arg_test_log,
-        )
-        gen_jets.constituents.histplot(
-            "phi_rel",
-            binrange=binrange,
-            binwidth=binwidth,
-            xlabel=r"particle $\Delta \phi$",
-            ax=ax[0, 2],
-            **arg_gen_log,
-        )
-
-        test_jets.histplot_multiplicities(
-            xlabel="jet multiplicity", ax=ax[0, 3], **arg_test
-        )
-        gen_jets.histplot_multiplicities(
-            xlabel="jet multiplicity", ax=ax[0, 3], **arg_gen
-        )
-
-        # ------------------------------
-
-        binrange, binwidth = (450, 1100), 10
-        test_jets.histplot(
-            "pt",
-            xlabel=r"jet $p_T$ [GeV]",
-            ylabel="density",
-            ax=ax[1, 0],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "pt",
-            xlabel=r"jet $p_T$ [GeV]",
-            ylabel="density",
-            ax=ax[1, 0],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_gen,
-        )
-
-        binrange, binwidth = (0, 300), 5
-        test_jets.histplot(
-            "m",
-            xlabel=r"jet mass [GeV]",
-            ax=ax[1, 1],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "m",
-            xlabel=r"jet mass [GeV]",
-            ax=ax[1, 1],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_gen,
-        )
-
-        binrange, binwidth, ylim = (0, 1.25), 0.025, (0, 4.0)
-        test_jets.histplot(
-            "tau21",
-            xlabel=r"$\tau_{21}$",
-            ylabel="density",
-            ax=ax[1, 2],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "tau21",
-            xlabel=r"$\tau_{21}$",
-            ylabel="density",
-            ax=ax[1, 2],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_gen,
-        )
-
-        test_jets.histplot(
-            "tau32",
-            xlabel=r"$\tau_{32}$",
-            ax=ax[1, 3],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "tau32",
-            xlabel=r"$\tau_{32}$",
-            ax=ax[1, 3],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_gen,
-        )
-
-        # ------------------------------
-
-        binrange, binwidth, ylim = (0, 10.0), 0.1, (0, 0.6)
-        test_jets.histplot(
-            "d2",
-            xlabel=r"$D_2$",
-            ylabel="density",
-            ax=ax[2, 0],
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "d2",
-            xlabel=r"$D_2$",
-            ylabel="density",
-            ax=ax[2, 0],
-            ylim=ylim,
-            binrange=binrange,
-            binwidth=binwidth,
-            **arg_gen,
-        )
-
-        xlim, ylim = (-20, 20), (0, 0.2)
-        test_jets.histplot(
-            "Q_total",
-            xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
-            discrete=True,
-            ax=ax[2, 1],
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "Q_total",
-            xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
-            ylim=ylim,
-            xlim=xlim,
-            ylabel="density",
-            discrete=True,
-            ax=ax[2, 1],
-            **arg_gen,
-        )
-
-        binrange, binwidth, ylim = (-1, 1), 0.03, (0.0, 4.0)
-        test_jets.histplot(
-            "Q_jet",
-            xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
-            binrange=binrange,
-            binwidth=binwidth,
-            ax=ax[2, 2],
-            **arg_test,
-        )
-        gen_jets.histplot(
-            "Q_jet",
-            xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
-            ylim=ylim,
-            binrange=binrange,
-            binwidth=binwidth,
-            ax=ax[2, 2],
-            **arg_gen,
-        )
-
-        xlim, ylim = (0, 70), (0, 0.08)
-        test_jets.histplot_multiplicities(
-            state=[2, 3, 4, 5, 6, 7],
-            xlabel="charged multiplicity",
-            ax=ax[2, 3],
-            **arg_test,
-        )
-        gen_jets.histplot_multiplicities(
-            state=[2, 3, 4, 5, 6, 7],
-            xlabel="charged multiplicity",
-            xlim=xlim,
-            ylim=ylim,
-            ax=ax[2, 3],
-            **arg_gen,
-        )
-
-        xlim, ylim = (0, 70), (0, 0.08)
-        test_jets.histplot_multiplicities(
-            state=[0, 1], xlabel="neutral multiplicity", ax=ax[3, 0], **arg_test
-        )
-        gen_jets.histplot_multiplicities(
-            state=[0, 1],
-            xlabel="neutral multiplicity",
-            xlim=xlim,
-            ylim=ylim,
-            ax=ax[3, 0],
-            **arg_gen,
-        )
-
-        xlim, ylim = (0, 70), (0, 0.08)
-        test_jets.histplot_multiplicities(
-            state=[1, 2, 3], xlabel="hadron multiplicity", ax=ax[3, 1], **arg_test
-        )
-        gen_jets.histplot_multiplicities(
-            state=[1, 2, 3],
-            xlabel="hadron multiplicity",
-            xlim=xlim,
-            ylim=ylim,
-            ax=ax[3, 1],
-            **arg_gen,
-        )
-
-        xlim, ylim = (-0.5, 7), (0, 1.25)
-        test_jets.histplot_multiplicities(
-            state=[4, 5, 6, 7], xlabel="lepton multiplicity", ax=ax[3, 2], **arg_test
-        )
-        gen_jets.histplot_multiplicities(
-            state=[4, 5, 6, 7],
-            xlabel="lepton multiplicity",
-            xlim=xlim,
-            ax=ax[3, 2],
-            **arg_gen,
-        )
-
-        xlim, ylim = (0, 50), (0, 0.08)
-        test_jets.histplot_multiplicities(
-            state=0, xlabel="photon multiplicity", ax=ax[3, 3], **arg_test
-        )
-        gen_jets.histplot_multiplicities(
-            state=0,
-            xlabel="photon multiplicity",
-            xlim=xlim,
-            ylim=ylim,
-            ax=ax[3, 3],
-            **arg_gen,
-        )
-
         plt.legend(fontsize=7)
         plt.tight_layout()
-        plt.show()
-        plt.savefig("results_plots.png")
-        mlflow.log_artifact("results_plots.png", artifact_path="plots")
+        return fig
