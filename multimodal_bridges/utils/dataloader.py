@@ -1,57 +1,60 @@
 import torch
 import numpy as np
+
 from torch.utils.data import DataLoader, Subset
 from torch.utils.data import Dataset
 from collections import namedtuple
+
+from utils.configs import ExperimentConfigs
 
 
 class DataSetModule(Dataset):
     def __init__(self, data):
         self.data = data
-        self.attr = []
+        self.attribute = []
 
         # ...source
 
         if hasattr(self.data.source, "continuous"):
-            self.attr.append("source_continuous")
+            self.attribute.append("source_continuous")
             self.source_continuous = self.data.source.continuous
 
         if hasattr(self.data.source, "discrete"):
-            self.attr.append("source_discrete")
+            self.attribute.append("source_discrete")
             self.source_discrete = self.data.source.discrete
 
         if hasattr(self.data.source, "mask"):
-            self.attr.append("source_mask")
+            self.attribute.append("source_mask")
             self.source_mask = self.data.source.mask
 
         # ...target
 
         if hasattr(self.data.target, "continuous"):
-            self.attr.append("target_continuous")
+            self.attribute.append("target_continuous")
             self.target_continuous = self.data.target.continuous
 
         if hasattr(self.data.target, "discrete"):
-            self.attr.append("target_discrete")
+            self.attribute.append("target_discrete")
             self.target_discrete = self.data.target.discrete
 
         if hasattr(self.data.target, "mask"):
-            self.attr.append("target_mask")
+            self.attribute.append("target_mask")
             self.target_mask = self.data.target.mask
 
         # ...context
 
         if hasattr(self.data, "context_continuous"):
-            self.attr.append("context_continuous")
+            self.attribute.append("context_continuous")
             self.context_continuous = self.data.context_continuous
 
         if hasattr(self.data, "context_discrete"):
-            self.attr.append("context_discrete")
+            self.attribute.append("context_discrete")
             self.context_discrete = self.data.context_discrete
 
-        self.databatch = namedtuple("databatch", self.attr)
+        self.databatch = namedtuple("databatch", self.attribute)
 
     def __getitem__(self, idx):
-        return self.databatch(*[getattr(self, attr)[idx] for attr in self.attr])
+        return self.databatch(*[getattr(self, attr)[idx] for attr in self.attribute])
 
     def __len__(self):
         return len(self.data.target)
@@ -63,18 +66,22 @@ class DataSetModule(Dataset):
 
 class DataloaderModule:
     def __init__(
-        self, config, datamodule, batch_size: int = None, data_split_frac: tuple = None
+        self,
+        datamodule,
+        config: ExperimentConfigs,
+        batch_size: int = None,
+        data_split_frac: tuple = None,
     ):
         self.datamodule = datamodule
         self.config = config
         self.dataset = DataSetModule(datamodule)
         self.data_split = (
-            self.config.train.data_split_frac
+            self.config.dataloader.data_split_frac
             if data_split_frac is None
             else data_split_frac
         )
         self.batch_size = (
-            self.config.train.batch_size if batch_size is None else batch_size
+            self.config.dataloader.batch_size if batch_size is None else batch_size
         )
         self.dataloader()
 

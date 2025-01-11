@@ -3,8 +3,6 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
-from encoders.embeddings import EncoderEmbeddings
-
 
 class MultiModalEPiC(nn.Module):
     """Permutation equivariant architecture for multi-modal continuous-discrete models"""
@@ -15,19 +13,6 @@ class MultiModalEPiC(nn.Module):
         self.dim_features_discrete = config.data.dim.features_discrete
         self.vocab_size = config.data.vocab_size.features
         self.epic = EPiC(config)
-        self.add_discrete_head = config.model.encoder.add_discrete_head
-        if self.add_discrete_head:
-            self.fc_layer = nn.Sequential(
-                nn.Linear(
-                    self.dim_features_discrete * self.vocab_size,
-                    self.dim_features_discrete * self.vocab_size,
-                ),
-                nn.SELU(),
-                nn.Linear(
-                    self.dim_features_discrete * self.vocab_size,
-                    self.dim_features_discrete * self.vocab_size,
-                ),
-            )
 
     def forward(
         self, t, x, k, mask=None, context_continuous=None, context_discrete=None
@@ -35,11 +20,7 @@ class MultiModalEPiC(nn.Module):
         h = self.epic(t, x, k, mask, context_continuous, context_discrete)
         continuous_head = h[..., : self.dim_features_continuous]
         discrete_head = h[..., self.dim_features_continuous :]
-
-        if self.add_discrete_head:
-            return continuous_head, self.fc_layer(discrete_head)
-        else:
-            return continuous_head, discrete_head
+        return continuous_head, discrete_head
 
 
 class EPiC(nn.Module):
@@ -113,6 +94,34 @@ class EPiC(nn.Module):
         )
         h = self.epic(x_local_emb, context_emb, mask)
         return h
+
+
+# from states import HybridState
+
+
+# class MultiModalEPiC(nn.Module):
+#     """Permutation equivariant architecture for multi-modal continuous-discrete models"""
+
+#     def __init__(self, config):
+#         super().__init__()
+#         self.epic_continuous = EPiCNetwork(
+#             dim_input=,
+#             dim_output=3,
+#             dim_context=0,
+#             num_blocks=6,
+#             dim_hidden_local=128,
+#             dim_hidden_global=10,
+#             use_skip_connection=False,
+#         )
+#         self.epic_discrete = EPiCNetwork(config)
+#         self.epic_hybrid = EPiCNetwork(config)
+
+#     def forward(self, state_local: HybridState, state_global: HybridState):
+#         t = state_local.time
+#         x = state_local.continuous
+#         k = state_local.discrete
+
+#         return continuous_head, discrete_head
 
 
 class EPiCNetwork(nn.Module):

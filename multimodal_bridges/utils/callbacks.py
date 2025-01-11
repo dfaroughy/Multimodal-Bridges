@@ -1,85 +1,137 @@
 from comet_ml import ExistingExperiment
-
+import torch
+from typing import Dict, Any
 import os
 import json
 from pathlib import Path
+from lightning import LightningModule, Trainer
 import matplotlib.pyplot as plt
-from lightning.pytorch.callbacks import Callback
+from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 
 from multimodal_bridge_matching import HybridState
 from utils.configs import ExperimentConfigs
 from data.particle_clouds.particles import ParticleClouds
 from data.particle_clouds.jets import JetClassHighLevelFeatures
 
+from lightning.pytorch.callbacks import ModelCheckpoint
+
+
+class ModelCheckpointCallback(ModelCheckpoint):
+    """
+    A wrapper around Lightning's ModelCheckpoint to initialize using ExperimentConfigs.
+    """
+
+    def __init__(self, config: ExperimentConfigs):
+        """
+        Initialize the callback using a configuration object.
+
+        Args:
+            config (ExperimentConfigs): The configuration object containing checkpoint settings.
+        """
+        checkpoint_config = config.checkpoints.to_dict()
+        super().__init__(**checkpoint_config)
+
 
 class MetricLoggerCallback(Callback):
     """
-    Custom MLflow Callback to handle logging and saving checkpoints as MLflow artifacts.
+    Callback to log epoch-level metrics dynamically during training and validation,
+    supporting additional custom metrics beyond loss.
     """
 
-    def __init__(self, sync_dist=False):
+    def __init__(self, config: ExperimentConfigs):
         super().__init__()
-        self.sync_dist = sync_dist
+        self.config = config
+        self.sync_dist = False
+        self.epoch_metrics = {"train": {}, "val": {}}
+
+    def setup(self, trainer, pl_module, stage=None):
+        """Set up distributed synchronization if required."""
+        self.sync_dist = trainer.world_size > 1
+
+    def _track_metrics(self, stage: str, outputs: Dict[str, torch.Tensor]):
+        """
+        Accumulate metrics for epoch-level logging.
+        Args:
+            stage (str): Either "train" or "val".
+            outputs (Dict[str, Any]): Dictionary of metrics from the batch.
+        """
+        for key, value in outputs.items():
+            if key not in self.epoch_metrics[stage]:
+                self.epoch_metrics[stage][key] = []
+            if isinstance(value, torch.Tensor):  # Handle tensor values
+                self.epoch_metrics[stage][key].append(value.detach().cpu().item())
+            elif isinstance(value, (float, int)):  # Handle float or int values
+                self.epoch_metrics[stage][key].append(value)
+            else:
+                raise TypeError(f"Unsupported metric type for key '{key}': {type(value)}")
+
+    def _log_epoch_metrics(self, stage: str, pl_module, trainer):
+        """
+        Compute and log metrics for the epoch, and log them using the Comet logger if available.
+        Args:
+            stage (str): Either "train" or "val".
+            pl_module: LightningModule to log metrics.
+            trainer: The Lightning Trainer instance.
+        """
+        epoch_metrics = {}
+        for key, values in self.epoch_metrics[stage].items():
+            epoch_metric = sum(values) / len(values)
+            self.log(
+                key,
+                epoch_metric,
+                on_epoch=True,
+                # logger=True,
+                sync_dist=self.sync_dist,
+            )
+            epoch_metrics[key] = epoch_metric
+        if hasattr(self.config, "comet_logger"):
+            trainer.logger.experiment.log_metrics(epoch_metrics, step=trainer.current_epoch)
+        self.epoch_metrics[stage].clear()  # Reset for next epoch
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        """
-        Logs metrics at the end of each training batch.
-        """
-        if outputs is not None:
-            loss = outputs["loss"]
-            loss_0 = outputs["loss_individual"][0]
-            loss_1 = outputs["loss_individual"][1]
-            weights_0 = outputs["weights"][0]
-            weights_1 = outputs["weights"][1]
-            pl_module.log("train_loss", loss, on_epoch=True, sync_dist=self.sync_dist)
-            pl_module.log(
-                "train_loss_continuous", loss_0, on_epoch=True, sync_dist=self.sync_dist
-            )
-            pl_module.log(
-                "train_loss_discrete", loss_1, on_epoch=True, sync_dist=self.sync_dist
-            )
-            pl_module.log(
-                "train_weights_continuous",
-                weights_0,
-                on_epoch=True,
-                sync_dist=self.sync_dist,
-            )
-            pl_module.log(
-                "train_weights_discrete",
-                weights_1,
-                on_epoch=True,
-                sync_dist=self.sync_dist,
-            )
+        """Accumulate metrics for epoch-level logging during training."""
+        self._track_metrics("train", outputs)
 
     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
-        """
-        Logs metrics at the end of each validation batch.
-        """
-        if outputs is not None:
-            loss = outputs["loss"]
-            loss_0 = outputs["loss_individual"][0]
-            loss_1 = outputs["loss_individual"][1]
-            weights_0 = outputs["weights"][0]
-            weights_1 = outputs["weights"][1]
-            pl_module.log("val_loss", loss, on_epoch=True, sync_dist=self.sync_dist)
-            pl_module.log(
-                "val_loss_continuous", loss_0, on_epoch=True, sync_dist=self.sync_dist
-            )
-            pl_module.log(
-                "val_loss_discrete", loss_1, on_epoch=True, sync_dist=self.sync_dist
-            )
-            pl_module.log(
-                "val_weights_continuous",
-                weights_0,
-                on_epoch=True,
-                sync_dist=self.sync_dist,
-            )
-            pl_module.log(
-                "val_weights_discrete",
-                weights_1,
-                on_epoch=True,
-                sync_dist=self.sync_dist,
-            )
+        """Accumulate metrics for epoch-level logging during validation."""
+        self._track_metrics("val", outputs)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        """Log metrics at the end of a training epoch."""
+        self._log_epoch_metrics("train", pl_module, trainer)
+
+    def on_validation_epoch_end(self, trainer, pl_module):
+        """Log metrics at the end of a validation epoch."""
+        self._log_epoch_metrics("val", pl_module, trainer)
+
+
+
+# class MetricLoggerCallback(Callback):
+#     """
+#     Custom Callback to handle logging of metrics during training and validation.
+#     """
+
+#     def __init__(self, config: ExperimentConfigs, sync_dist=False):
+#         super().__init__()
+#         self.config = config
+
+#     def setup(self, trainer, pl_module, stage) -> None:
+#         self.sync_dist = trainer.world_size > 1
+
+#     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+#         """
+#         Logs metrics at the end of each training epoch.
+#         """
+#         for key, value in outputs.items():
+#             self.log(key, value, on_epoch=True, logger=True, sync_dist=self.sync_dist)
+
+#     def on_validation_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+#         """
+#         Logs metrics at the end of each validation batch.
+#         """
+#         for key, value in outputs.items():
+#             prog_bar = 'loss' in key
+#             self.log(key, value, on_epoch=True, prog_bar=prog_bar, logger=True, sync_dist=self.sync_dist)
 
 
 class JetsGenerativeCallback(Callback):
@@ -91,8 +143,8 @@ class JetsGenerativeCallback(Callback):
         self.batched_target_states = []
 
     def on_predict_start(self, trainer, pl_module):
-        self.data_dir = os.path.join(self.config.experiment.dir_path, "data")
-        self.metric_dir = os.path.join(self.config.experiment.dir_path, "metrics")
+        self.data_dir = os.path.join(self.config.path, "data")
+        self.metric_dir = os.path.join(self.config.path, "metrics")
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.metric_dir, exist_ok=True)
 
@@ -118,28 +170,18 @@ class JetsGenerativeCallback(Callback):
         # ...log results
 
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
-        figs = self.get_results_plots(gen_jets, test_jets)
-        self.log_results(metrics, figs)
-
-    def log_results(self, metrics=None, figures=None):
         self.gen_sample.save_to(path=os.path.join(self.data_dir, "generated_sample.h5"))
         self.test_sample.save_to(path=os.path.join(self.data_dir, "test_sample.h5"))
         with open(os.path.join(self.metric_dir, "performance_metrics.h5"), "w") as f:
             json.dump(metrics, f, indent=4)
+
         if hasattr(self.config.experiment, "comet_logger"):
-            api_key = self.config.experiment.comet_logger.api_key
-            exp_key = self.config.experiment.comet_logger.experiment_key
-            experiment = ExistingExperiment(
-                api_key=api_key, previous_experiment=exp_key
-            )
-            if metrics:
-                experiment.log_metrics(metrics)
-            if figures:
-                for key in figures.keys():
-                    experiment.log_figure(figure=figures[key], figure_name=key)
-            experiment.end()
-        else:
-            pass
+            figures = self.get_results_plots(gen_jets, test_jets)
+            trainer.logger.experiment.log_metrics(metrics)
+            for key in figures.keys():
+                trainer.logger.experiment.log_figure(
+                    figure=figures[key], figure_name=key
+                )
 
     def compute_performance_metrics(self, gen_jets, test_jets):
         return {

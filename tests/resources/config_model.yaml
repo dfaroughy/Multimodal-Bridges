@@ -1,0 +1,70 @@
+model:
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+
+data:
+  target_name: AspenOpenJets
+  target_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_preprocess_continuous: standardize
+  target_preprocess_discrete: tokenize
+  source_name: GaussNoise
+  source_path: null
+  source_preprocess_continuous: null
+  source_preprocess_discrete: tokenize
+  source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
+  fill_target_with_noise: false
+  min_num_particles: 0
+  max_num_particles: 128
+  num_jets: 100
+  dim_continuous: 3             # pt, eta_rel, phi_phi
+  dim_discrete: 2               # flavor x charge
+  dim_context_continuous: 5
+  dim_context_discrete: 4      
+  vocab_size: 8 
+  vocab_size_context: 7  
+
+encoder:
+  name: MultiModalParticleTransformer
+  num_heads: 1
+  dim_hidden_continuous: 32
+  dim_hidden_discrete: 32
+  dropout: 0.1
+  embed_type_time: SinusoidalPositionalEncoding
+  embed_type_continuous: MLP
+  embed_type_discrete: LookupTableMLP
+  embed_type_augment_continuous: MLP
+  embed_type_augment_discrete: LookupTableMLP
+  embed_type_context_continuous: MLP
+  embed_type_context_discrete: LookupTableMLP
+  dim_emb_time: 32
+  dim_emb_continuous: 16
+  dim_emb_discrete: 12
+  dim_emb_augment_continuous: 16
+  dim_emb_augment_discrete: 15
+  dim_emb_context_continuous: 5
+  dim_emb_context_discrete: 2
+  activation: ReLU
+
+# encoder:
+#   name: MultiModalEPiC
+#   num_blocks: 2
+#   dim_hidden_local: 16
+#   dim_hidden_glob: 16
+#   activation: SELU
+#   skip_connection: true
+#   dropout: 0.1
+#   embed_type_time: SinusoidalPositionalEncoding
+#   embed_type_continuous: MLP
+#   embed_type_discrete: LookupTableMLP
+#   embed_type_augment_continuous: MLP
+#   embed_type_augment_discrete: LookupTableMLP
+#   embed_type_context_continuous: MLP
+#   embed_type_context_discrete: LookupTableMLP
+#   dim_emb_time: 8
+#   dim_emb_continuous: 16
+#   dim_emb_discrete: 12
+#   dim_emb_augment_continuous: 10
+#   dim_emb_augment_discrete: 15
+#   dim_emb_context_continuous: 5
+#   dim_emb_context_discrete: 2
+#   activation: ReLU

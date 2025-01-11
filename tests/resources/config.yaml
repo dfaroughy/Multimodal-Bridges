@@ -1,0 +1,117 @@
+comet_logger:
+  api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
+  project_name: multimodal-jets
+  workspace: dfaroughy
+  save_dir: /home/df630/Multimodal-Bridges/tests/resources/output
+  experiment_name: pytest-123
+    
+checkpoints:
+  dirpath: null 
+  monitor: val_loss      
+  mode: min            
+  save_top_k: 3
+  filename: best-{epoch:02d}-{val_loss:.4f}
+  save_last: true
+
+trainer:
+  max_epochs: 3
+  gradient_clip_val: 1.0
+  optimizer_name: AdamW
+
+optimizer:
+  name: AdamW
+  params:
+    lr: 0.001
+    weight_decay: 5.0e-5
+    betas: [0.9, 0.999]
+    eps: 1.e-8
+    amsgrad: false
+
+scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 1000
+    eta_min: 5.0e-5
+    last_epoch: -1
+
+dataloader:
+  batch_size: 64
+  data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
+  
+data:
+  target_name: AspenOpenJets
+  target_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_preprocess_continuous: standardize
+  target_preprocess_discrete: tokenize
+  source_name: GaussNoise
+  source_path: null
+  source_preprocess_continuous: null
+  source_preprocess_discrete: tokenize
+  source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
+  fill_target_with_noise: false
+  min_num_particles: 0
+  max_num_particles: 128
+  num_jets: 100
+  dim_continuous: 3             # pt, eta_rel, phi_phi
+  dim_discrete: 1               # flavor x charge
+  dim_context_continuous: 0
+  dim_context_discrete: 0      
+  vocab_size: 8 
+  vocab_size_context: 0  
+
+model:
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+  loss_weights: 'learnable'
+  sigma: 0.0001
+  gamma: 0.125
+  num_timesteps: 100
+  time_eps: 0.0001
+
+encoder:
+  name: MultiModalParticleTransformer
+  num_heads: 1
+  dim_hidden_continuous: 32
+  dim_hidden_discrete: 32
+  dropout: 0.2
+  embed_type_time: SinusoidalPositionalEncoding
+  embed_type_continuous: Linear
+  embed_type_discrete: LookupTable
+  embed_type_augment_continuous: Linear
+  embed_type_augment_discrete: LookupTable
+  embed_type_context_continuous: null
+  embed_type_context_discrete: null
+  dim_emb_time: 32
+  dim_emb_continuous: 16
+  dim_emb_discrete: 16
+  dim_emb_augment_continuous: 16
+  dim_emb_augment_discrete: 16
+  dim_emb_context_continuous: 0
+  dim_emb_context_discrete: 0
+  activation: ReLU
+
+# embed:
+#   type_time: SinusoidalPositionalEncoding
+#   type_continuous: Linear
+#   type_discrete: LookupTable
+#   type_augment_continuous: Linear
+#   type_augment_discrete: LookupTable
+#   type_context_continuous: null
+#   type_context_discrete: null
+#   dim_time: 16
+#   dim_continuous: 16
+#   dim_discrete: 16
+#   dim_augment_continuous: 16
+#   dim_augment_discrete: 16
+#   dim_context_continuous: 0
+#   dim_context_discrete: 0
+#   activation: ReLU
+
+# encoder:
+#   name: MultiModalEPiC
+#   num_blocks: 2
+#   dim_hidden_local: 16
+#   dim_hidden_glob: 16
+#   activation: SELU
+#   skip_connection: true
+#   dropout: 0.1

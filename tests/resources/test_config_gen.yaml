@@ -1,0 +1,9 @@
+model: 
+  pipeline:
+    num_timesteps: 100
+    time_eps: 0.0001
+data:
+  target:
+    path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+    params:
+      num_jets: 100 

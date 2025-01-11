@@ -4,6 +4,8 @@ import awkward as ak
 import fastjet
 import vector
 import scipy
+import json
+import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -18,84 +20,93 @@ from data.particle_clouds.particles import ParticleClouds
 class JetDataModule:
     """class that prepares the source-target coupling"""
 
-    def __init__(self, config, preprocess=False):
+    def __init__(self, config, preprocess=False, metadata_path='./'):
         self.config = config
-        kwargs_target = config.data.target.params.to_dict()
-        kwargs_source = config.data.source.params.to_dict()
 
-        # ...target:
+        kwargs = config.data.clone()
+        kwargs = kwargs.to_dict()
+
+        # ...define target and source:
 
         self.target = ParticleClouds(
-            dataset=config.data.target.name,
-            data_paths=getattr(config.data.target, "path", None),
-            **kwargs_target,
+            dataset=config.data.target_name,
+            data_paths=getattr(config.data, "target_path", None),
+            **kwargs,
         )
 
-        # ... noise source:
-
-        kwargs_source["set_masks_like"] = (
+        kwargs["target_multiplicity"] = (
             self.target.multiplicity
-            if config.data.target.params.max_num_particles
-            > config.data.target.params.min_num_particles
+            if config.data.source_masks_from_target_masks
             else None
         )
 
-        kwargs_source["num_jets"] = getattr(
-            config.data.source.params, "num_jets", len(self.target)
-        )
-
         self.source = ParticleClouds(
-            dataset=config.data.source.name,
-            data_paths=getattr(config.data.source, "path", None),
-            **kwargs_source,
+            dataset=config.data.source_name,
+            data_paths=getattr(config.data, "source_path", None),
+            **kwargs,
         )
-        
+
+        # ...get metadata:
+
+        self.info = {}
+        self.info["source_data_stats"] = self.source.get_data_stats()
+        self.info["target_data_stats"] = self.target.get_data_stats()
+        self.info["data_flavor_encoding"] = {
+            "isPhoton": [1, 0, 0, 0, 0],
+            "isNeutralHadron": [0, 1, 0, 0, 0],
+            "isChargedHadron": [0, 0, 1, 0, 0],
+            "isElectron": [0, 0, 0, 1, 0],
+            "isMuon": [0, 0, 0, 0, 1],
+        }
+        self.info["electric_charges"] = [-1, 0, 1]
+        self.info["particles"] = {
+            0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
+            1: {
+                "name": "neutral hadron",
+                "color": "darkred",
+                "marker": "o",
+                "tex": r"$\rm h^0$",
+            },
+            2: {
+                "name": "negative hadron",
+                "color": "darkred",
+                "marker": "v",
+                "tex": r"$\rm h^-$",
+            },
+            3: {
+                "name": "positive hadron",
+                "color": "darkred",
+                "marker": "^",
+                "tex": r"$\rm h^+$",
+            },
+            4: {"name": "electron", "color": "blue", "marker": "v", "tex": r"e^-"},
+            5: {"name": "positron", "color": "blue", "marker": "^", "tex": r"e^+"},
+            6: {"name": "muon", "color": "green", "marker": "v", "tex": r"\mu^-"},
+            7: {"name": "antimuon", "color": "green", "marker": "^", "tex": r"\mu^+"},
+        }
+
+        # ...preprocess if needed:
+
         if preprocess:
-            self.preprocess()
-
-    def preprocess(self, source_stats=None, target_stats=None):
-        if hasattr(self.config.data.source, "preprocess"):
             self.source.preprocess(
-                output_continuous=self.config.data.source.preprocess.continuous,
-                output_discrete=self.config.data.source.preprocess.discrete,
-                stats=source_stats,
+                continuous=self.config.data.source_preprocess_continuous,
+                discrete=self.config.data.source_preprocess_discrete,
+                **self.info["source_data_stats"],
             )
-            self.config.data.source.preprocess.stats = (
-                self.source.stats if hasattr(self.source, "stats") else target_stats
-            )
-        if hasattr(self.config.data.target, "preprocess"):
             self.target.preprocess(
-                output_continuous=self.config.data.target.preprocess.continuous,
-                output_discrete=self.config.data.target.preprocess.discrete,
-                stats=target_stats,
+                continuous=self.config.data.target_preprocess_continuous,
+                discrete=self.config.data.target_preprocess_discrete,
+                **self.info["target_data_stats"],
             )
-            self.config.data.target.preprocess.stats = (
-                self.target.stats if hasattr(self.target, "stats") else source_stats
-            )
+            self.store_metadata(path=metadata_path)
 
-    def postprocess(self, source_stats=None, target_stats=None):
-        if hasattr(self.config.data.source, "preprocess"):
-            self.source.postprocess(
-                input_continuous=self.config.data.source.preprocess.continuous,
-                input_discrete=self.config.data.source.preprocess.discrete,
-                stats=self.config.data.source.preprocess.stats
-                if source_stats is None
-                else source_stats,
-            )
-            self.config.data.source.preprocess.stats = (
-                self.source.stats if hasattr(self.source, "stats") else target_stats
-            )
-        if hasattr(self.config.data.target, "preprocess"):
-            self.target.postprocess(
-                input_continuous=self.config.data.target.preprocess.continuous,
-                input_discrete=self.config.data.target.preprocess.discrete,
-                stats=self.config.data.target.preprocess.stats
-                if target_stats is None
-                else target_stats,
-            )
-            self.config.data.target.preprocess.stats = (
-                self.target.stats if hasattr(self.target, "stats") else source_stats
-            )
+        kwargs.clear()
+
+    def store_metadata(self, path="./", name="metadata"):
+        path = os.path.join(path, f"{name}.json")
+        print(f"INFO: Storing metadata at: {path}")
+        with open(path, "w") as f:
+            json.dump(self.info, f, indent=4)
 
 
 class JetClassHighLevelFeatures:

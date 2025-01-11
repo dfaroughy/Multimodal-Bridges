@@ -246,18 +246,21 @@ def sample_noise(noise="GaussNoise", **args):
     charge[flavor == 0] = charge[flavor == 1] = 0
     flavor = F.one_hot(torch.tensor(flavor), num_classes=5)
     charge = torch.tensor(charge).unsqueeze(-1)
-    discrete = torch.cat([flavor, charge], dim=-1)
-    discrete = torch.tensor(discrete).long()
+    discrete = torch.cat([flavor, charge], dim=-1).long()
+    # discrete = torch.tensor(discrete).long()
     return continuous, discrete
 
 
 def sample_masks(**args):
     """Sample masks from empirical multiplicity distribution `hist`."""
-    hist = args.get("set_masks_like", None)
+    hist = args.get("target_multiplicity", None)
+    min_num_particles = args.get("min_num_particles", 128)
     max_num_particles = args.get("max_num_particles", 128)
     num_jets = args.get("num_jets", 100_000)
 
     if hist is None:
+        return torch.ones((num_jets, max_num_particles, 1)).long()
+    elif min_num_particles == max_num_particles:
         return torch.ones((num_jets, max_num_particles, 1)).long()
     else:
         hist_values, bin_edges = np.histogram(
@@ -282,7 +285,76 @@ def sample_masks(**args):
         return masks.unsqueeze(-1).long()
 
 
-def flavor_to_onehot(flavor_tensor, charge_tensor):
+def map_basis_to_tokens(tensor):
+    """
+    Maps a tensor with shape (N, M, D) to a space of 8 tokens based on particle type and charge.
+
+    Args:
+        tensor (torch.Tensor): Input tensor of shape (N, M, D) where D=6.
+
+    Returns:
+        torch.Tensor: A tensor of shape (N, M) containing the token mappings.
+    """
+
+    if tensor.shape[-1] != 6:
+        raise ValueError("The last dimension of the input tensor must be 6.")
+    one_hot = tensor[..., :-1]  # Shape: (N, M, 5)
+    charge = tensor[..., -1]  # Shape: (N, M)
+    flavor_charge_combined = one_hot.argmax(dim=-1) * 10 + charge  # Shape: (N, M)
+    map_rules = {
+        0: 0,  # Photon (1, 0, 0, 0, 0; 0)
+        10: 1,  # Neutral hadron (0, 1, 0, 0, 0; 0)
+        19: 2,  # Negatively charged hadron (0, 0, 1, 0, 0; -1)
+        21: 3,  # Positively charged hadron (0, 0, 1, 0, 0; 1)
+        29: 4,  # Negatively charged electron (0, 0, 0, 1, 0; -1)
+        31: 5,  # Positively charged electron (0, 0, 0, 1, 0; 1)
+        39: 6,  # Negatively charged muon (0, 0, 0, 0, 1; -1)
+        41: 7,  # Positively charged muon (0, 0, 0, 0, 1; 1)
+    }
+    tokens = torch.full_like(
+        flavor_charge_combined, -1, dtype=torch.int64
+    )  # Initialize with invalid token
+    for key, value in map_rules.items():
+        tokens[flavor_charge_combined == key] = value
+    return tokens.unsqueeze(-1)
+
+
+def map_tokens_to_basis(tokens):
+    """
+    Maps a tensor of tokens (integers 0-7) back to the original basis representation.
+
+    Args:
+        tokens (torch.Tensor): A tensor of shape (N, M) containing token values (0-7).
+
+    Returns:
+        torch.Tensor: A tensor of shape (N, M, 6) with the original basis representation.
+    """
+    token_to_basis = torch.tensor(
+        [
+            [1, 0, 0, 0, 0, 0],  # Photon 0
+            [0, 1, 0, 0, 0, 0],  # Neutral hadron 1
+            [0, 0, 1, 0, 0, -1],  # Negatively charged hadron 2
+            [0, 0, 1, 0, 0, 1],  # Positively charged hadron 3
+            [0, 0, 0, 1, 0, -1],  # Negatively charged electron 4
+            [0, 0, 0, 1, 0, 1],  # Positively charged electron 5
+            [0, 0, 0, 0, 1, -1],  # Negatively charged muon 6
+            [0, 0, 0, 0, 1, 1],  # Positively charged muon 7
+        ],
+        dtype=torch.float32,
+    )
+    basis_tensor = token_to_basis[tokens.squeeze(-1)]
+    return basis_tensor
+
+
+def map_basis_to_onehot(tensor):
+    return F.one_hot(map_basis_to_tokens(tensor).squeeze(-1), num_classes=8)
+
+
+def map_onehot_to_basis(onehot):
+    return map_tokens_to_basis(onehot.argmax(dim=-1).unsqueeze(-1))
+
+
+def physics_to_onehot(flavor_tensor, charge_tensor):
     """inputs:
         - flavor in one-hot (isPhoton, isNeutralHadron, isChargedHadron, isElectron, isMuon)
         - charge (-1, 0, +1)
@@ -303,7 +375,7 @@ def flavor_to_onehot(flavor_tensor, charge_tensor):
     return one_hot
 
 
-def states_to_flavor(states):
+def tokens_to_physics(states):
     """Get the (flavor, charge) representation of each particle:
     0 -> (0, 0)   photon
     1 -> (1, 0)   neutral hadron

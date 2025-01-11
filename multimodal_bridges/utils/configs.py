@@ -1,18 +1,18 @@
 import yaml
 import os
 
+
 class ExperimentConfigs:
     def __init__(self, config_source):
         if isinstance(config_source, str):
             with open(config_source, "r") as f:
                 config_dict = yaml.safe_load(f)
-
         elif isinstance(config_source, dict):
             config_dict = config_source
         else:
             raise ValueError("config_source must be a file path or a dictionary")
 
-        self._set_attributes(config_dict)  # set attributes recursively
+        self._set_attributes(config_dict)
 
     def _set_attributes(self, config_dict):
         for key, value in config_dict.items():
@@ -35,16 +35,16 @@ class ExperimentConfigs:
 
         return config_dict
 
-    def save(self, path, name='config.yaml'):
+    def save(self, path, name="config.yaml"):
         """
         Saves the configuration parameters to a YAML file.
         """
-        path = os.join(path, name)
+        path = os.path.join(path, name)
         config_dict = self.to_dict()
         with open(path, "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False)
 
-    def delete(self, key):
+    def remove(self, key):
         """
         Deletes a key from the configuration.
         """
@@ -62,7 +62,29 @@ class ExperimentConfigs:
         Clones the configuration.
         """
         return ExperimentConfigs(self.to_dict())
-    
+
+    def update(self, config_new, verbose=False):
+        """
+        Updates the configuration with the given dictionary or ExperimentConfigs object.
+        """
+        if config_new is not None:
+            if isinstance(config_new, ExperimentConfigs):
+                config_new = config_new.to_dict()
+            else:
+                config_new = ExperimentConfigs(config_new).to_dict()
+            def recursive_update(current, new):
+                for key, value in new.items():
+                    if isinstance(value, dict) and isinstance(current.get(key), dict):
+                        recursive_update(current[key], value)
+                    else:
+                        current[key] = value
+                        if verbose:
+                            print(f"INFO: config update `{key}` -> {value}")
+
+            current_config = self.to_dict()
+            recursive_update(current_config, config_new)
+            self._set_attributes(current_config)
+
     def _print_dict(self, config_dict, indent=0):
         for key, value in config_dict.items():
             prefix = " " * indent
@@ -71,3 +93,17 @@ class ExperimentConfigs:
                 self._print_dict(value, indent + 4)
             else:
                 print(f"{prefix}{key}: {value}")
+
+
+progress_bar_theme = {
+    "description": "green_yellow",
+    "progress_bar": "green1",
+    "progress_bar_finished": "green1",
+    "progress_bar_pulse": "#6206E0",
+    "batch_progress": "green_yellow",
+    "time": "grey82",
+    "processing_speed": "grey82",
+    "metrics": "grey82",
+    "metrics_text_delimiter": "\n",
+    "metrics_format": ".3e",
+}
