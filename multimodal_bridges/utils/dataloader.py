@@ -5,8 +5,9 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.data import Dataset
 from collections import namedtuple
 
-from utils.configs import ExperimentConfigs
 from utils.misc import SimpleLogger as log
+from utils.configs import ExperimentConfigs
+
 
 class DataSetModule(Dataset):
     def __init__(self, data):
@@ -134,7 +135,8 @@ class DataloaderModule:
             else None
         )
 
-        log.info("train size: {}, validation size: {}, testing sizes: {}".format(
+        log.info(
+            "train size: {}, validation size: {}, testing sizes: {}".format(
                 len(self.train.dataset if train is not None else []),
                 len(self.valid.dataset if valid is not None else []),
                 len(self.test.dataset if test is not None else []),

@@ -2,6 +2,7 @@ import yaml
 import os
 from utils.misc import SimpleLogger as log
 
+
 class ExperimentConfigs:
     def __init__(self, config_source):
         if isinstance(config_source, str):
@@ -73,6 +74,7 @@ class ExperimentConfigs:
                 config_new = config_new.to_dict()
             else:
                 config_new = ExperimentConfigs(config_new).to_dict()
+
             def recursive_update(current, new):
                 for key, value in new.items():
                     if isinstance(value, dict) and isinstance(current.get(key), dict):

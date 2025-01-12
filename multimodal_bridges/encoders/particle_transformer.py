@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from states import HybridState
+from multimodal_states import HybridState
 
 
 class MultiModalParticleTransformer(nn.Module):
@@ -199,7 +199,6 @@ class ParticleAttentionBlock(nn.Module):
         Wq = self.query_proj(query)
         Wk = self.key_proj(key)
         Wv = self.value_proj(key)
-
         attn, _ = self.attention(Wq, Wk, Wv, key_padding_mask=mask.float().squeeze(-1))
         attn = self.norm_2(attn)
         return self.feedfwd(attn)

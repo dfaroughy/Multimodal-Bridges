@@ -4,8 +4,8 @@ import torch
 from collections import namedtuple
 
 from utils.configs import ExperimentConfigs
-from states import HybridState
-from encoders.embed import MultiModalPointCloudEmbedder
+from multimodal_states import HybridState
+from encoders.embedder import MultiModalPointCloudEmbedder
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")

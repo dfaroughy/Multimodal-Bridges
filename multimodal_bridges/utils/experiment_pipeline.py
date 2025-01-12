@@ -1,22 +1,21 @@
 from comet_ml import ExistingExperiment
-import os
-import lightning.pytorch as L
-from lightning.pytorch.utilities import rank_zero_only
-
-from typing import List, Union, Dict
 from pytorch_lightning.loggers import CometLogger
+import os
+from typing import List, Union
+import lightning.pytorch as L
 from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
+from lightning.pytorch.utilities import rank_zero_only
 from utils.configs import ExperimentConfigs, progress_bar
+from utils.misc import SimpleLogger as log
+from utils.dataloader import DataloaderModule
+from data.particle_clouds.jets import JetDataModule
+from model.multimodal_bridge_matching import MultiModalBridgeMatching
 from utils.callbacks import (
     ModelCheckpointCallback,
     ExperimentLoggerCallback,
     JetsGenerativeCallback,
 )
-from utils.misc import SimpleLogger as log
-from utils.dataloader import DataloaderModule
-from data.particle_clouds.jets import JetDataModule
-from multimodal_bridge_matching import MultiModalBridgeMatching
 
 
 class ExperimentPipeline:
@@ -165,7 +164,7 @@ class ExperimentPipeline:
         )
         experiment.log_parameters(self.config.to_dict())
         return CometLogger(**self.config.comet_logger.to_dict())
-    
+
     def _setup_dataloader(self) -> DataloaderModule:
         """
         Prepare the data module for training and validation datasets.

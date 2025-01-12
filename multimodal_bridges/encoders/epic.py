@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
-from states import HybridState
+from multimodal_states import HybridState
 
 
 class MultiModalEPiC(nn.Module):

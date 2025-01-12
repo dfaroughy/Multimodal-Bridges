@@ -7,7 +7,7 @@ import h5py
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
-from multimodal_bridge_matching import HybridState
+from model.multimodal_states import HybridState
 from data.particle_clouds.utils import (
     extract_jetclass_features,
     extract_aoj_features,

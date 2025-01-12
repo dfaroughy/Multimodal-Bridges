@@ -1,21 +1,18 @@
-from comet_ml import ExistingExperiment
-import torch
-from typing import Dict, Any
 import os
 import json
+import torch
 from pathlib import Path
-from lightning import LightningModule, Trainer
+from typing import Dict
 import matplotlib.pyplot as plt
+
+from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 from lightning.pytorch.utilities import rank_zero_only
 
-from multimodal_bridge_matching import HybridState
 from utils.configs import ExperimentConfigs
-from utils.misc import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
 from data.particle_clouds.jets import JetClassHighLevelFeatures
-
-from lightning.pytorch.callbacks import ModelCheckpoint
+from model.multimodal_bridge_matching import HybridState
 
 
 class ModelCheckpointCallback(ModelCheckpoint):

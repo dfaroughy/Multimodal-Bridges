@@ -4,8 +4,8 @@ import torch
 from collections import namedtuple
 
 from utils.configs import ExperimentConfigs
-from states import HybridState
-from encoders.embed import MultiModalPointCloudEmbedder
+from multimodal_states import HybridState
+from encoders.embedder import MultiModalPointCloudEmbedder
 from encoders.particle_transformer import MultiModalParticleTransformer
 from encoders.epic import MultiModalEPiC
 

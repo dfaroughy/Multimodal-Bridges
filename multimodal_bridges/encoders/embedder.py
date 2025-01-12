@@ -2,7 +2,8 @@ import torch
 import math
 from torch import nn
 from typing import Tuple
-from states import HybridState
+
+from model.multimodal_states import HybridState
 
 
 class MultiModalPointCloudEmbedder(nn.Module):
@@ -141,7 +142,7 @@ class EmbedMode(nn.Module):
                 nn.Linear(dim_hidden, dim_hidden),
             )
         elif embedding_type == "LookupTable":
-            self.embedding = nn.Embedding(dim_input, dim_hidden) # output=
+            self.embedding = nn.Embedding(dim_input, dim_hidden)  # output=
         elif embedding_type == "LookupTableMLP":
             self.embedding = nn.Sequential(
                 nn.Embedding(dim_input, dim_hidden),

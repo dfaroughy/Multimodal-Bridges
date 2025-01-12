@@ -5,13 +5,14 @@ from dataclasses import dataclass
 from typing import List, Tuple, Dict
 import h5py
 
-from states import HybridState
-from encoders.embed import MultiModalPointCloudEmbedder
 from utils.configs import ExperimentConfigs
 from utils.registry import registered_models as Encoder
 from utils.registry import registered_bridges as Bridge
 from utils.registry import registered_optimizers as Optimizer
 from utils.registry import registered_schedulers as Scheduler
+
+from model.multimodal_states import HybridState
+from encoders.embedder import MultiModalPointCloudEmbedder
 
 
 class MultiModalBridgeMatching(L.LightningModule):
