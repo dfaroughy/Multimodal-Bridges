@@ -14,13 +14,14 @@ plt.rcParams["figure.autolayout"] = False
 
 vector.register_awkward()
 
+from utils.misc import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
 
 
 class JetDataModule:
     """class that prepares the source-target coupling"""
 
-    def __init__(self, config, preprocess=False, metadata_path='./'):
+    def __init__(self, config, preprocess=False, metadata_path=None):
         self.config = config
 
         kwargs = config.data.clone()
@@ -48,18 +49,18 @@ class JetDataModule:
 
         # ...get metadata:
 
-        self.info = {}
-        self.info["source_data_stats"] = self.source.get_data_stats()
-        self.info["target_data_stats"] = self.target.get_data_stats()
-        self.info["data_flavor_encoding"] = {
+        self.metadata = {}
+        self.metadata["source_data_stats"] = self.source.get_data_stats()
+        self.metadata["target_data_stats"] = self.target.get_data_stats()
+        self.metadata["data_flavor_encoding"] = {
             "isPhoton": [1, 0, 0, 0, 0],
             "isNeutralHadron": [0, 1, 0, 0, 0],
             "isChargedHadron": [0, 0, 1, 0, 0],
             "isElectron": [0, 0, 0, 1, 0],
             "isMuon": [0, 0, 0, 0, 1],
         }
-        self.info["electric_charges"] = [-1, 0, 1]
-        self.info["particles"] = {
+        self.metadata["electric_charges"] = [-1, 0, 1]
+        self.metadata["particles"] = {
             0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
             1: {
                 "name": "neutral hadron",
@@ -91,22 +92,24 @@ class JetDataModule:
             self.source.preprocess(
                 continuous=self.config.data.source_preprocess_continuous,
                 discrete=self.config.data.source_preprocess_discrete,
-                **self.info["source_data_stats"],
+                **self.metadata["source_data_stats"],
             )
             self.target.preprocess(
                 continuous=self.config.data.target_preprocess_continuous,
                 discrete=self.config.data.target_preprocess_discrete,
-                **self.info["target_data_stats"],
+                **self.metadata["target_data_stats"],
             )
             self.store_metadata(path=metadata_path)
 
         kwargs.clear()
 
-    def store_metadata(self, path="./", name="metadata"):
-        path = os.path.join(path, f"{name}.json")
-        print(f"INFO: Storing metadata at: {path}")
-        with open(path, "w") as f:
-            json.dump(self.info, f, indent=4)
+    def store_metadata(self, path):
+        if path:
+            log.info(f"Storing metadata at: {path}")
+            self.metadata_path = os.path.join(path, "metadata.json")
+            if not os.path.exists(self.metadata_path):
+                with open(self.metadata_path, "w") as f:
+                    json.dump(self.metadata, f, indent=4)
 
 
 class JetClassHighLevelFeatures:
