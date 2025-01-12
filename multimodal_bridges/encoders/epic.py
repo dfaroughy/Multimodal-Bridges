@@ -3,125 +3,59 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
+from states import HybridState
+
 
 class MultiModalEPiC(nn.Module):
     """Permutation equivariant architecture for multi-modal continuous-discrete models"""
 
     def __init__(self, config):
         super().__init__()
-        self.dim_features_continuous = config.data.dim.features_continuous
-        self.dim_features_discrete = config.data.dim.features_discrete
-        self.vocab_size = config.data.vocab_size.features
-        self.epic = EPiC(config)
 
-    def forward(
-        self, t, x, k, mask=None, context_continuous=None, context_discrete=None
-    ):
-        h = self.epic(t, x, k, mask, context_continuous, context_discrete)
-        continuous_head = h[..., : self.dim_features_continuous]
-        discrete_head = h[..., self.dim_features_continuous :]
-        return continuous_head, discrete_head
+        self.config = config
 
-
-class EPiC(nn.Module):
-    """Model wrapper for EPiC Network
-
-    Forward pass:
-        - t: time input of shape (b, 1)
-        - x: continuous features of shape (b, n, dim_continuous)
-        - k: discrete features of shape (b,  n, dim_discrete)
-        - context: context features of shape (b, dim_context)
-        - mask: binary mask of shape (b, n, 1) indicating valid particles (1) or masked particles (0)
-    """
-
-    def __init__(self, config):
-        super().__init__()
-
-        # ...data dimensions:
-        self.dim_features_continuous = config.data.dim.features_continuous
-        self.dim_features_discrete = config.data.dim.features_discrete
-        dim_context_continuous = config.data.dim.context_continuous
-        self.vocab_size = config.data.vocab_size.features
-
-        # ...embedding dimensions:
-        dim_time_emb = config.model.encoder.dim.emb_time
-        dim_features_continuous_emb = (
-            config.model.encoder.dim.emb_features_continuous
-            if config.model.encoder.dim.emb_features_continuous
-            else self.dim_features_continuous
+        dim_input = (
+            config.encoder.dim_emb_time
+            + config.encoder.dim_emb_continuous
+            + config.encoder.dim_emb_discrete * config.data.dim_discrete
+            + config.encoder.dim_emb_augment_continuous
+            + config.encoder.dim_emb_augment_discrete * config.data.dim_discrete
         )
-        dim_features_discrete_emb = config.model.encoder.dim.emb_features_discrete
-        dim_context_continuous_emb = (
-            config.model.encoder.dim.emb_context_continuous
-            if config.model.encoder.dim.emb_context_continuous
-            else dim_context_continuous
+        dim_output = (
+            config.data.dim_continuous
+            + config.data.dim_discrete * config.data.vocab_size
         )
-        dim_context_discrete_emb = config.model.encoder.dim.emb_context_discrete
+        dim_context = (
+            config.encoder.dim_emb_time
+            + config.encoder.dim_emb_context_continuous
+            + config.encoder.dim_emb_context_discrete * config.data.dim_context_discrete
+        )
 
-        # ...components:
-        self.embedding = EncoderEmbeddings(config)
         self.epic = EPiCNetwork(
-            dim_input=dim_time_emb
-            + dim_features_continuous_emb
-            + dim_features_discrete_emb,
-            dim_output=self.dim_features_continuous
-            + self.dim_features_discrete * self.vocab_size,
-            dim_context=dim_time_emb
-            + dim_context_continuous_emb
-            + dim_context_discrete_emb,
-            num_blocks=config.model.encoder.num_blocks,
-            dim_hidden_local=config.model.encoder.dim.hidden_local,
-            dim_hidden_global=config.model.encoder.dim.hidden_glob,
-            use_skip_connection=config.model.encoder.skip_connection,
+            dim_input=dim_input,
+            dim_output=dim_output,
+            dim_context=dim_context,
+            num_blocks=config.encoder.num_blocks,
+            dim_hidden_local=config.encoder.dim_hidden_local,
+            dim_hidden_global=config.encoder.dim_hidden_glob,
+            use_skip_connection=config.encoder.skip_connection,
         )
 
     def forward(
-        self, t, x, k=None, mask=None, context_continuous=None, context_discrete=None
-    ):
-        context_continuous = (
-            context_continuous.to(t.device)
-            if isinstance(context_continuous, torch.Tensor)
-            else None
+        self, state_local: HybridState, state_global: HybridState
+    ) -> HybridState:
+        local_cat = torch.cat(
+            [state_local.time, state_local.continuous, state_local.discrete], dim=-1
         )
-        context_discrete = (
-            context_discrete.to(t.device)
-            if isinstance(context_discrete, torch.Tensor)
-            else None
+        global_cat = torch.cat(
+            [state_global.time, state_global.continuous, state_global.discrete], dim=-1
         )
+        mask = state_local.mask
 
-        x_local_emb, context_emb = self.embedding(
-            t, x, k, mask, context_continuous, context_discrete
-        )
-        h = self.epic(x_local_emb, context_emb, mask)
-        return h
-
-
-# from states import HybridState
-
-
-# class MultiModalEPiC(nn.Module):
-#     """Permutation equivariant architecture for multi-modal continuous-discrete models"""
-
-#     def __init__(self, config):
-#         super().__init__()
-#         self.epic_continuous = EPiCNetwork(
-#             dim_input=,
-#             dim_output=3,
-#             dim_context=0,
-#             num_blocks=6,
-#             dim_hidden_local=128,
-#             dim_hidden_global=10,
-#             use_skip_connection=False,
-#         )
-#         self.epic_discrete = EPiCNetwork(config)
-#         self.epic_hybrid = EPiCNetwork(config)
-
-#     def forward(self, state_local: HybridState, state_global: HybridState):
-#         t = state_local.time
-#         x = state_local.continuous
-#         k = state_local.discrete
-
-#         return continuous_head, discrete_head
+        h = self.epic(local_cat, global_cat, mask)
+        head_continuous = h[..., : self.config.data.dim_continuous]
+        head_discrete = h[..., self.config.data.dim_continuous :]
+        return HybridState(None, head_continuous, head_discrete, mask)
 
 
 class EPiCNetwork(nn.Module):
@@ -273,3 +207,95 @@ class EPiC_layer(nn.Module):
         x_local = self.activation_fn(self.fc_local2(x_local1) + x_local)
 
         return x_local * mask, x_global
+
+
+# class MultiModalEPiC(nn.Module):
+#     """Permutation equivariant architecture for multi-modal continuous-discrete models"""
+
+#     def __init__(self, config):
+#         super().__init__()
+#         self.dim_features_continuous = config.data.dim.features_continuous
+#         self.dim_features_discrete = config.data.dim.features_discrete
+#         self.vocab_size = config.data.vocab_size.features
+#         self.epic = EPiC(config)
+
+#     def forward(
+#         self, t, x, k, mask=None, context_continuous=None, context_discrete=None
+#     ):
+#         h = self.epic(t, x, k, mask, context_continuous, context_discrete)
+#         continuous_head = h[..., : self.dim_features_continuous]
+#         discrete_head = h[..., self.dim_features_continuous :]
+#         return continuous_head, discrete_head
+
+
+# class EPiC(nn.Module):
+#     """Model wrapper for EPiC Network
+
+#     Forward pass:
+#         - t: time input of shape (b, 1)
+#         - x: continuous features of shape (b, n, dim_continuous)
+#         - k: discrete features of shape (b,  n, dim_discrete)
+#         - context: context features of shape (b, dim_context)
+#         - mask: binary mask of shape (b, n, 1) indicating valid particles (1) or masked particles (0)
+#     """
+
+#     def __init__(self, config):
+#         super().__init__()
+
+#         # ...data dimensions:
+#         self.dim_features_continuous = config.data.dim.features_continuous
+#         self.dim_features_discrete = config.data.dim.features_discrete
+#         dim_context_continuous = config.data.dim.context_continuous
+#         self.vocab_size = config.data.vocab_size.features
+
+#         # ...embedding dimensions:
+#         dim_time_emb = config.model.encoder.dim.emb_time
+#         dim_features_continuous_emb = (
+#             config.model.encoder.dim.emb_features_continuous
+#             if config.model.encoder.dim.emb_features_continuous
+#             else self.dim_features_continuous
+#         )
+#         dim_features_discrete_emb = config.model.encoder.dim.emb_features_discrete
+#         dim_context_continuous_emb = (
+#             config.model.encoder.dim.emb_context_continuous
+#             if config.model.encoder.dim.emb_context_continuous
+#             else dim_context_continuous
+#         )
+#         dim_context_discrete_emb = config.model.encoder.dim.emb_context_discrete
+
+#         # ...components:
+#         self.embedding = EncoderEmbeddings(config)
+#         self.epic = EPiCNetwork(
+#             dim_input=dim_time_emb
+#             + dim_features_continuous_emb
+#             + dim_features_discrete_emb,
+#             dim_output=self.dim_features_continuous
+#             + self.dim_features_discrete * self.vocab_size,
+#             dim_context=dim_time_emb
+#             + dim_context_continuous_emb
+#             + dim_context_discrete_emb,
+#             num_blocks=config.model.encoder.num_blocks,
+#             dim_hidden_local=config.model.encoder.dim.hidden_local,
+#             dim_hidden_global=config.model.encoder.dim.hidden_glob,
+#             use_skip_connection=config.model.encoder.skip_connection,
+#         )
+
+#     def forward(
+#         self, t, x, k=None, mask=None, context_continuous=None, context_discrete=None
+#     ):
+#         context_continuous = (
+#             context_continuous.to(t.device)
+#             if isinstance(context_continuous, torch.Tensor)
+#             else None
+#         )
+#         context_discrete = (
+#             context_discrete.to(t.device)
+#             if isinstance(context_discrete, torch.Tensor)
+#             else None
+#         )
+
+#         x_local_emb, context_emb = self.embedding(
+#             t, x, k, mask, context_continuous, context_discrete
+#         )
+#         h = self.epic(x_local_emb, context_emb, mask)
+#         return h

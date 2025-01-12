@@ -3,6 +3,7 @@ import torch.nn as nn
 
 from states import HybridState
 
+
 class MultiModalParticleTransformer(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -23,8 +24,8 @@ class MultiModalParticleTransformer(nn.Module):
         # ...continuous pipeline
 
         self.attn_continuous_0 = ParticleAttentionBlock(
-            dim_input_continuous,
-            dim_input_continuous,
+            dim_input_continuous,  # key, values
+            dim_input_continuous,  # query
             dim_hidden_continuous,
             dim_hidden_continuous,
             num_heads=num_heads,
@@ -121,17 +122,19 @@ class MultiModalParticleTransformer(nn.Module):
             dropout=config.encoder.dropout,
         )
 
-    def forward(self, state_loc: HybridState, state_glob: HybridState):
-        time = state_loc.time
-        continuous = state_loc.continuous
-        discrete = state_loc.discrete
-        mask = state_loc.mask
+    def forward(
+        self, state_local: HybridState, state_global: HybridState
+    ) -> HybridState:
+        time = state_local.time
+        continuous = state_local.continuous
+        discrete = state_local.discrete
+        mask = state_local.mask
 
         h = self.attn_continuous_0(continuous, continuous, None, mask)
         f = self.attn_discrete_0(discrete, discrete, None, mask)
 
         h_res, f_res = h.clone(), f.clone()
-        
+
         h = self.attn_continuous_1(h, h, time, mask)
         f = self.attn_discrete_1(f, f, time, mask)
 
@@ -143,11 +146,14 @@ class MultiModalParticleTransformer(nn.Module):
 
         h += h_res
         f += f_res
-        
+
         head_continuous = self.cross_attn_continuous_1(h, f, time, mask)
         head_discrete = self.cross_attn_discrete_1(f, h, time, mask)
 
-        return head_continuous, head_discrete
+        return HybridState(
+            continuous=head_continuous, discrete=head_discrete, mask=mask
+        )
+
 
 class ParticleAttentionBlock(nn.Module):
     def __init__(
@@ -163,10 +169,9 @@ class ParticleAttentionBlock(nn.Module):
     ):
         super().__init__()
 
-        
         dim_query += dim_time
         dim_key += dim_time
-        
+
         self.norm_0 = nn.LayerNorm(dim_key)
         self.norm_1 = nn.LayerNorm(dim_query)
         self.norm_2 = nn.LayerNorm(dim_hidden)
@@ -197,4 +202,4 @@ class ParticleAttentionBlock(nn.Module):
 
         attn, _ = self.attention(Wq, Wk, Wv, key_padding_mask=mask.float().squeeze(-1))
         attn = self.norm_2(attn)
-        return self.feedfwd(attn) 
+        return self.feedfwd(attn)
