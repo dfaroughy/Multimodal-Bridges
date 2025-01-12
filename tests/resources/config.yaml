@@ -3,7 +3,7 @@ comet_logger:
   project_name: multimodal-jets
   workspace: dfaroughy
   save_dir: /home/df630/Multimodal-Bridges/tests/resources/output
-  experiment_name: pytest-123
+  experiment_name: pytest
     
 checkpoints:
   dirpath: null 
@@ -14,14 +14,13 @@ checkpoints:
   save_last: true
 
 trainer:
-  max_epochs: 3
+  max_epochs: 10
   gradient_clip_val: 1.0
-  optimizer_name: AdamW
 
 optimizer:
   name: AdamW
   params:
-    lr: 0.001
+    lr: 0.0002
     weight_decay: 5.0e-5
     betas: [0.9, 0.999]
     eps: 1.e-8
@@ -31,16 +30,28 @@ scheduler:
   name: CosineAnnealingLR
   params:
     T_max: 1000
-    eta_min: 5.0e-5
+    eta_min: 1.0e-5
     last_epoch: -1
 
 dataloader:
-  batch_size: 64
+  batch_size: 1024
   data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
   
 data:
   target_name: AspenOpenJets
-  target_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_path: 
+    - /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+
+    # - /home/df630/CMB/data/AOJ/2016H_job0.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job1.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job2.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job3.h5 
+    # - /home/df630/CMB/data/AOJ/2016H_job4.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job5.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job6.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job7.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job8.h5
+    # - /home/df630/CMB/data/AOJ/2016H_job9.h5
   target_preprocess_continuous: standardize
   target_preprocess_discrete: tokenize
   source_name: GaussNoise
@@ -70,48 +81,22 @@ model:
 
 encoder:
   name: MultiModalParticleTransformer
-  num_heads: 1
+  num_heads: 4
   dim_hidden_continuous: 32
   dim_hidden_discrete: 32
   dropout: 0.2
   embed_type_time: SinusoidalPositionalEncoding
   embed_type_continuous: Linear
   embed_type_discrete: LookupTable
-  embed_type_augment_continuous: Linear
-  embed_type_augment_discrete: LookupTable
+  embed_type_augment_continuous: null
+  embed_type_augment_discrete: null
   embed_type_context_continuous: null
   embed_type_context_discrete: null
-  dim_emb_time: 32
+  dim_emb_time: 16
   dim_emb_continuous: 16
   dim_emb_discrete: 16
-  dim_emb_augment_continuous: 16
-  dim_emb_augment_discrete: 16
+  dim_emb_augment_continuous: 0
+  dim_emb_augment_discrete: 0
   dim_emb_context_continuous: 0
   dim_emb_context_discrete: 0
   activation: ReLU
-
-# embed:
-#   type_time: SinusoidalPositionalEncoding
-#   type_continuous: Linear
-#   type_discrete: LookupTable
-#   type_augment_continuous: Linear
-#   type_augment_discrete: LookupTable
-#   type_context_continuous: null
-#   type_context_discrete: null
-#   dim_time: 16
-#   dim_continuous: 16
-#   dim_discrete: 16
-#   dim_augment_continuous: 16
-#   dim_augment_discrete: 16
-#   dim_context_continuous: 0
-#   dim_context_discrete: 0
-#   activation: ReLU
-
-# encoder:
-#   name: MultiModalEPiC
-#   num_blocks: 2
-#   dim_hidden_local: 16
-#   dim_hidden_glob: 16
-#   activation: SELU
-#   skip_connection: true
-#   dropout: 0.1

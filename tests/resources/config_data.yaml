@@ -4,11 +4,11 @@ dataloader:
   
 data:
   target_name: AspenOpenJets
+  source_name: GaussNoise
   target_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  source_path: null
   target_preprocess_continuous: standardize
   target_preprocess_discrete: tokenize
-  source_name: GaussNoise
-  source_path: null
   source_preprocess_continuous: null
   source_preprocess_discrete: tokenize
   source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
