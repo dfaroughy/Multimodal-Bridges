@@ -11,24 +11,20 @@ data:
   source_path: null
   source_preprocess_continuous: null
   source_preprocess_discrete: tokenize
-  source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
+  source_masks_from_target_masks: true 
   fill_target_with_noise: false
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
-  dim_continuous: 3             # pt, eta_rel, phi_phi
-  dim_discrete: 2               # flavor x charge
+  dim_continuous: 3             
+  dim_discrete: 2               
   dim_context_continuous: 5
   dim_context_discrete: 4      
   vocab_size: 8 
   vocab_size_context: 7  
 
 encoder:
-  name: MultiModalParticleTransformer
-  num_heads: 1
-  dim_hidden_continuous: 32
-  dim_hidden_discrete: 32
-  dropout: 0.1
+  name: null
   embed_type_time: SinusoidalPositionalEncoding
   embed_type_continuous: MLP
   embed_type_discrete: LookupTableMLP

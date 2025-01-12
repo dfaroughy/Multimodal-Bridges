@@ -2,45 +2,41 @@ import os
 import pytest
 from pathlib import Path
 from utils.experiment_pipeline import ExperimentPipeline
+import shutil
 
-RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config.yaml")
+RES_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 
-def test_experiment_train():
-    pipeline = ExperimentPipeline(
-        config=CONFIG_PATH,
-        accelerator="gpu",
-        strategy="auto",
-        devices=[0],
-    )
-    pipeline.train()
 
-def test_experiment_train_from_checkpoint():
-    EXP_PATH = f"{RESOURCE_PATH}/output/multimodal-jets/e4941ebe0024468d988baf191943544e"
-    pipeline = ExperimentPipeline(
+def test_new_experiment():
+    CONFIG_PATH = os.path.join(RES_PATH, "config.yaml")
+    new_exp = ExperimentPipeline(config=CONFIG_PATH)
+    new_exp.train()
+    assert Path(new_exp.trainer.config.path).exists()
+    shutil.rmtree(new_exp.trainer.config.path)
+
+
+def test_resume_from_checkpoint():
+    EXP_PATH = f"{RES_PATH}/output/multimodal-jets/b9430ef34f0e48da987ea80e495b4263"
+    resume_exp = ExperimentPipeline(
+        config={"trainer": {"max_epochs": 30}},
         experiment_path=EXP_PATH,
-        accelerator="gpu",
-        strategy="auto",
-        devices=[0],
-        config={"train": 
-                       {"max_epochs": 300}
-                },
+        load_ckpt="last.ckpt",
     )
-    pipeline.train()
+    resume_exp.train()
+
 
 def test_experiment_generation():
-    EXP_PATH = f"{RESOURCE_PATH}/output/multimodal-jets/87218a2fba09445e9fe0c61e7386f639"
+    EXP_PATH = f"{RES_PATH}/output/multimodal-jets/b9430ef34f0e48da987ea80e495b4263"
+    CONFIG_PATH = f"{RES_PATH}/config_gen.yaml"
     pipeline = ExperimentPipeline(
-        config=f"{RESOURCE_PATH}/test_config_gen.yaml",
+        config=CONFIG_PATH,
         experiment_path=EXP_PATH,
-        accelerator="gpu",
-        strategy="auto",
-        devices=[0],
+        load_ckpt="last.ckpt",
     )
     pipeline.generate()
 
 
 if __name__ == "__main__":
-    test_experiment_train()
-    # test_experiment_train_from_checkpoint()
-    # test_experiment_generation()
+    # test_new_experiment()
+    # test_resume_from_checkpoint()
+    test_experiment_generation()

@@ -3,7 +3,7 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from utils.experiment_pipeline import get_from_json
+from utils.misc import get_from_json
 from utils.configs import ExperimentConfigs
 from utils.dataloader import DataloaderModule
 from data.particle_clouds.jets import JetDataModule
@@ -15,7 +15,7 @@ from data.particle_clouds.utils import (
 )
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config.yaml")    
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_data.yaml")    
 
 def test_configs():
     config = ExperimentConfigs(CONFIG_PATH)
@@ -93,6 +93,8 @@ def test_data_processing_closure():
     jets = JetDataModule(config=config)
     jets_preprocessed = JetDataModule(config=config, preprocess=True, metadata_path=RESOURCE_PATH)
 
+    assert jets_preprocessed.metadata_path == os.path.join(RESOURCE_PATH, 'metadata.json')
+
     N = config.data.num_jets
     M = config.data.max_num_particles
     V = config.data.vocab_size
@@ -106,7 +108,7 @@ def test_data_processing_closure():
 
     prep_continuous = config.data.target_preprocess_continuous
     prep_discrete = config.data.target_preprocess_discrete
-    stats = get_from_json('target_data_stats', RESOURCE_PATH)
+    stats = get_from_json('target_data_stats', RESOURCE_PATH, 'metadata.json')
 
     jets_preprocessed.target.postprocess(prep_continuous, prep_discrete, **stats)
 
@@ -115,4 +117,4 @@ def test_data_processing_closure():
 
 
 if __name__ == "__main__":
-    test_data_discrete_bases()
+    test_data_processing_closure()
