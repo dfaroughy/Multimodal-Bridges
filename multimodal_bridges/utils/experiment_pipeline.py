@@ -1,26 +1,23 @@
 from comet_ml import ExistingExperiment
 import os
-import json
 import lightning.pytorch as L
+from lightning.pytorch.utilities import rank_zero_only
+
+from typing import List, Union, Dict
 from pytorch_lightning.loggers import CometLogger
 from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
-from utils.configs import ExperimentConfigs, progress_bar_theme
+from utils.configs import ExperimentConfigs, progress_bar
 from utils.callbacks import (
     ModelCheckpointCallback,
-    MetricLoggerCallback,
+    ExperimentLoggerCallback,
     JetsGenerativeCallback,
 )
+from utils.misc import SimpleLogger as log
 from utils.dataloader import DataloaderModule
 from data.particle_clouds.jets import JetDataModule
 from multimodal_bridge_matching import MultiModalBridgeMatching
 
-
-def get_from_json(key, path, name='metadata.json'):
-    path = os.path.join(path, name)
-    with open(path, 'r') as f:
-        file = json.load(f)
-    return file[key]
 
 class ExperimentPipeline:
     """
@@ -31,17 +28,18 @@ class ExperimentPipeline:
         self,
         config: str = None,
         experiment_path: str = None,
-        load_checkpoint: str = "last.ckpt",
+        load_ckpt: str = "last.ckpt",
         accelerator: str = "gpu",
         strategy: str = "ddp",
         devices: str = "auto",
         num_nodes: int = 1,
+        sync_batchnorm: bool = False,
     ):
         """
         Initialize the pipeline with configurations and components.
 
         Args:
-            config_path (str): Path to the config file (used for training from scratch).
+            config (str): Path to the config file (used for training from scratch).
             experiment_path (str): Path to a saved experiment for resuming/inference training (optional).
             load_checkpoint (str): Name of the checkpoint file to load only if experiment_path is provided.
             accelerator (str): Type of accelerator to use (e.g., "gpu").
@@ -53,35 +51,31 @@ class ExperimentPipeline:
             config_update (dict): override model/data/train config matching keys.
         """
 
-        self.checkpoint_path = None
         self.accelerator = accelerator
         self.strategy = strategy
         self.devices = devices
         self.num_nodes = num_nodes
+        self.sync_batchnorm = sync_batchnorm
+        self.ckpt_path = None
         self.config_update = None
 
-        if config and not experiment_path:
-            print("INFO: starting new experiment")
+        if not experiment_path and config:
+            log.info("starting new experiment!")
             self.config = self._load_config(config)
             self.model = self._setup_model()
             self.logger = self._setup_logger()
         else:
-            print(
-                "INFO: resuming training or performing inference from existing experiment."
-            )
+            log.info("loading from existing experiment.")
+            assert experiment_path, "provide experiment path"
+            assert load_ckpt, "provide checkpoint name to load"
             self.config_update = config
-            assert experiment_path, "provide experiment path "
-            assert load_checkpoint, "provide checkpoint name to load"
             self.experiment_path = experiment_path
-            self.checkpoint_path = os.path.join(experiment_path, "checkpoints", load_checkpoint)
-            self.model = MultiModalBridgeMatching.load_from_checkpoint(
-                self.checkpoint_path
-            )
+            self.ckpt_path = os.path.join(experiment_path, "checkpoints", load_ckpt)
+            self.model = MultiModalBridgeMatching.load_from_checkpoint(self.ckpt_path)
             self.config = self.model.config
-            self.config.path = experiment_path
-            self.logger = self._setup_logger_from_experiment()
+            self.logger = self._setup_logger(new_experiment=False)
 
-        self.callbacks = self._setup_callbacks()
+        self.callbacks = self._setup_callbacks_list()
 
     def train(self):
         """
@@ -90,11 +84,16 @@ class ExperimentPipeline:
         self.config.update(self.config_update, verbose=True)
         self.dataloader = self._setup_dataloader()
         self.trainer = self._setup_trainer()
+
+        if self.new_experiment:
+            self.trainer.config = self.config
+            self.trainer.metadata = self.metadata
+
         self.trainer.fit(
             model=self.model,
             train_dataloaders=self.dataloader.train,
             val_dataloaders=self.dataloader.valid,
-            ckpt_path=self.checkpoint_path,
+            ckpt_path=self.ckpt_path,
         )
 
     def generate(self):
@@ -102,13 +101,13 @@ class ExperimentPipeline:
         Generate new target data from (pre) trained model using test source data.
         """
         self.config.data.remove("target_path")
-        self.config.data.remove("target_preprocess_continuous")  # no need to preprocess test data
-        self.config.data.remove("target_preprocess_discrete")  # no need to preprocess test data
+        self.config.data.remove("target_preprocess_continuous")
+        self.config.data.remove("target_preprocess_discrete")
         self.config.dataloader.data_split_frac = [0.0, 0.0, 1.0]  # test only dataloader
         self.config.update(self.config_update, verbose=True)
-        assert (
-            self.config.data.target_path
-        ), "provide a valid target test data path in config_update!"
+        assert self.config.data.target_path, (
+            "provide a valid target test data path in config_update!"
+        )
 
         self.dataloader = self._setup_dataloader()
         self.trainer = self._setup_trainer()
@@ -123,50 +122,58 @@ class ExperimentPipeline:
         """
         return ExperimentConfigs(config_path)
 
-    def _setup_logger(self):
+    def _setup_logger(self, new_experiment=True) -> Union[CometLogger, None]:
         """
         Set up the logger based on experiment configuration.
+        Logger is initialized only on rank 0 for distributed training.
         """
+        self.new_experiment = new_experiment
         if hasattr(self.config, "comet_logger"):
-            comet_config = self.config.comet_logger.to_dict()
-            logger = CometLogger(**comet_config)
-            self.config.comet_logger.experiment_key = (
-                logger.experiment.get_key()
-            )
-            logger.experiment.log_parameters(self.config.to_dict())
-            return logger
+            if self.new_experiment:
+                return self._setup_comet_logger_new()
+            else:
+                return self._setup_comet_logger_existing()
         return None
 
-    def _setup_logger_from_experiment(self):
+    @rank_zero_only
+    def _setup_comet_logger_new(self) -> CometLogger:
         """
-        Set up the logger when resuming training from a checkpoint.
+        Initialize a new CometLogger instance for a new experiment.
         """
-        if hasattr(self.config, "comet_logger"):
-            api_key = self.config.comet_logger.api_key
-            exp_key = self.config.comet_logger.experiment_key
-            self.config.checkpoints.dirpath = os.path.join(
-                self.experiment_path, "checkpoints"
-            )
-            comet_config = self.config.comet_logger.to_dict()
-            try:
-                experiment = ExistingExperiment(api_key=api_key, experiment_key=exp_key)
-                experiment.log_parameters(self.config.to_dict())
-                return CometLogger(**comet_config)
-            except Exception as e:
-                print(f"Failed to reconnect to existing Comet experiment: {e}")
-        elif hasattr(self.config, "mlflow_logger"):
-            # TODO
-            pass
+        logger = CometLogger(**self.config.comet_logger.to_dict())
+        logger.experiment.log_parameters(self.config.to_dict())
+        self.config.comet_logger.experiment_key = logger.experiment.get_key()
+        self.config.path = os.path.join(
+            self.config.comet_logger.save_dir,
+            self.config.comet_logger.project_name,
+            self.config.comet_logger.experiment_key,
+        )
+        log.info(f"Experiment path: {self.config.path}")
+        return logger
 
-        print("No logger configuration found in checkpoint; logger set to False.")
-        return None
-
+    @rank_zero_only
+    def _setup_comet_logger_existing(self) -> CometLogger:
+        """
+        Reconnect to an existing Comet experiment for resuming training.
+        """
+        self.config.checkpoints.dirpath = os.path.join(
+            self.experiment_path, "checkpoints"
+        )
+        experiment = ExistingExperiment(
+            api_key=self.config.comet_logger.api_key,
+            experiment_key=self.config.comet_logger.experiment_key,
+        )
+        experiment.log_parameters(self.config.to_dict())
+        return CometLogger(**self.config.comet_logger.to_dict())
+    
     def _setup_dataloader(self) -> DataloaderModule:
         """
         Prepare the data module for training and validation datasets.
+        Saves metadata for later use.
         """
-        jet_data = JetDataModule(config=self.config, preprocess=True)
-        return DataloaderModule(config=self.config, datamodule=jet_data)
+        data = JetDataModule(config=self.config, preprocess=True)
+        self.metadata = data.metadata
+        return DataloaderModule(config=self.config, datamodule=data)
 
     def _setup_model(self) -> MultiModalBridgeMatching:
         """
@@ -174,16 +181,14 @@ class ExperimentPipeline:
         """
         return MultiModalBridgeMatching(self.config)
 
-    def _setup_callbacks(self):
+    def _setup_callbacks_list(self) -> List[L.Callback]:
         """
         Configure and return the necessary callbacks for training.
         """
         callbacks = []
-        callbacks.append(
-            RichProgressBar(theme=RichProgressBarTheme(**progress_bar_theme))
-        )
+        callbacks.append(RichProgressBar(theme=RichProgressBarTheme(**progress_bar)))
         callbacks.append(ModelCheckpointCallback(self.config.clone()))
-        callbacks.append(MetricLoggerCallback(self.config.clone()))
+        callbacks.append(ExperimentLoggerCallback(self.config.clone()))
         callbacks.append(JetsGenerativeCallback(self.config.clone()))
         return callbacks
 
@@ -199,6 +204,7 @@ class ExperimentPipeline:
             "strategy": self.strategy,
             "devices": self.devices,
             "gradient_clip_val": self.config.trainer.gradient_clip_val,
+            "sync_batchnorm": self.sync_batchnorm,
             "callbacks": self.callbacks,
             "logger": self.logger,
             "num_nodes": self.num_nodes,
