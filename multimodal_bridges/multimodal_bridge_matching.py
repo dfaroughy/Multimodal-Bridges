@@ -13,12 +13,6 @@ from utils.registry import registered_bridges as Bridge
 from utils.registry import registered_optimizers as Optimizer
 from utils.registry import registered_schedulers as Scheduler
 
-@dataclass
-class MultiHeadOutput:
-    """model output heads"""
-
-    continuous: torch.Tensor = None
-    discrete: torch.Tensor = None
 
 class MultiModalBridgeMatching(L.LightningModule):
     """Bridge-Matching model for hybrid data"""
@@ -42,10 +36,9 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.loss_multimode = MultiModeLoss(mode=self.weight)
         self.save_hyperparameters()
 
-    def forward(self, state: HybridState, batch) -> MultiHeadOutput:
-        h_local, h_global = self.embedder(state, batch) 
-        continuous_head, discrete_head = self.encoder(h_local, h_global)
-        return MultiHeadOutput(continuous_head, discrete_head)
+    def forward(self, state: HybridState, batch) -> HybridState:
+        h_local, h_global = self.embedder(state, batch)
+        return self.encoder(h_local, h_global)
 
     def sample_bridges(self, batch) -> HybridState:
         """sample stochastic bridges"""
@@ -67,7 +60,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         return HybridState(time, continuous, discrete, mask)
 
     def loss_continuous(
-        self, heads: MultiHeadOutput, state: HybridState, batch
+        self, heads: HybridState, state: HybridState, batch
     ) -> torch.Tensor:
         """mean square error loss for drift matching"""
         if hasattr(self, "bridge_continuous"):
@@ -84,7 +77,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             return torch.tensor(0.0, device=self.device)
 
     def loss_discrete(
-        self, heads: MultiHeadOutput, state: HybridState, batch
+        self, heads: HybridState, state: HybridState, batch
     ) -> torch.Tensor:
         """cross-entropy loss for discrete state classifier"""
         if hasattr(self, "bridge_discrete"):
@@ -156,7 +149,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             "weights_continuous": weights[0],
             "weights_discrete": weights[1],
         }
-    
+
     def predict_step(
         self, batch, batch_idx
     ) -> Tuple[HybridState, HybridState, HybridState]:

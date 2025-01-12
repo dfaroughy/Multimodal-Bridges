@@ -1,6 +1,6 @@
 import yaml
 import os
-
+from utils.misc import SimpleLogger as log
 
 class ExperimentConfigs:
     def __init__(self, config_source):
@@ -40,9 +40,10 @@ class ExperimentConfigs:
         Saves the configuration parameters to a YAML file.
         """
         path = os.path.join(path, name)
-        config_dict = self.to_dict()
-        with open(path, "w") as f:
-            yaml.dump(config_dict, f, default_flow_style=False)
+        if not os.path.exists(path):
+            log.info(f"Saving configuration to {path}")
+            with open(path, "w") as f:
+                yaml.dump(self.to_dict(), f, default_flow_style=False)
 
     def remove(self, key):
         """
@@ -79,7 +80,7 @@ class ExperimentConfigs:
                     else:
                         current[key] = value
                         if verbose:
-                            print(f"INFO: config update `{key}` -> {value}")
+                            log.info(f"config update `{key}` -> {value}")
 
             current_config = self.to_dict()
             recursive_update(current_config, config_new)
@@ -95,7 +96,7 @@ class ExperimentConfigs:
                 print(f"{prefix}{key}: {value}")
 
 
-progress_bar_theme = {
+progress_bar = {
     "description": "green_yellow",
     "progress_bar": "green1",
     "progress_bar_finished": "green1",

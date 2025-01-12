@@ -6,7 +6,7 @@ import h5py
 
 @dataclass
 class HybridState:
-    """time-dependent hybrid bridge (t, x, k, mask)"""
+    """time-dependent hybrid state (t, x, k, mask)"""
 
     time: torch.Tensor = None
     continuous: torch.Tensor = None
@@ -72,15 +72,3 @@ class HybridState:
                 f.create_dataset("discrete", data=self.discrete.cpu().numpy())
             if self.mask is not None:
                 f.create_dataset("mask", data=self.mask.cpu().numpy())
-
-    # def concat_modes(self, which="all"):
-    #     """ concatenate all modes: t * x * k along dim=-1 """
-    #     if which=='all':
-    #         return torch.cat(
-    #         [self.time.clone(), 
-    #          self.continuous.clone(), 
-    #          self.discrete.clone()], dim=-1)
-    #     elif which==('time','continuous'):
-    #         return torch.cat(
-    #         [self.continuous.clone(), 
-    #          self.discrete.clone()], dim=-1)

@@ -6,7 +6,7 @@ from torch.utils.data import Dataset
 from collections import namedtuple
 
 from utils.configs import ExperimentConfigs
-
+from utils.misc import SimpleLogger as log
 
 class DataSetModule(Dataset):
     def __init__(self, data):
@@ -86,9 +86,9 @@ class DataloaderModule:
         self.dataloader()
 
     def train_val_test_split(self, shuffle=False):
-        assert (
-            np.abs(1.0 - sum(self.data_split)) < 1e-3
-        ), "Split fractions do not sum to 1!"
+        assert np.abs(1.0 - sum(self.data_split)) < 1e-3, (
+            "Split fractions do not sum to 1!"
+        )
         total_size = len(self.dataset)
         train_size = int(total_size * self.data_split[0])
         valid_size = int(total_size * self.data_split[1])
@@ -110,9 +110,9 @@ class DataloaderModule:
         return train_set, valid_set, test_set
 
     def dataloader(self):
-        print("INFO: building dataloaders...")
-        print(
-            "INFO: train/val/test split ratios: {}/{}/{}".format(
+        log.info("building dataloaders...")
+        log.info(
+            "train/val/test split ratios: {}/{}/{}".format(
                 self.data_split[0], self.data_split[1], self.data_split[2]
             )
         )
@@ -134,8 +134,7 @@ class DataloaderModule:
             else None
         )
 
-        print(
-            "INFO: train size: {}, validation size: {}, testing sizes: {}".format(
+        log.info("train size: {}, validation size: {}, testing sizes: {}".format(
                 len(self.train.dataset if train is not None else []),
                 len(self.valid.dataset if valid is not None else []),
                 len(self.test.dataset if test is not None else []),
