@@ -115,11 +115,13 @@ class ExperimentPipeline:
     # ...helper methods
 
     @staticmethod
-    def _load_config(config_path: str) -> ExperimentConfigs:
+    def _load_config(config: Union[str, ExperimentConfigs]) -> ExperimentConfigs:
         """
         Load experiment configurations from the given file path.
         """
-        return ExperimentConfigs(config_path)
+        if isinstance(config, ExperimentConfigs):
+            return config
+        return ExperimentConfigs(config)
 
     def _setup_logger(self, new_experiment=True) -> Union[CometLogger, None]:
         """
