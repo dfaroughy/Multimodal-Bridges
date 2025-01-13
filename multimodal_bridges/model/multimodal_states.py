@@ -72,3 +72,14 @@ class HybridState:
                 f.create_dataset("discrete", data=self.discrete.cpu().numpy())
             if self.mask is not None:
                 f.create_dataset("mask", data=self.mask.cpu().numpy())
+
+    def modes(self, ) -> List[str]:
+        """Return a list of non-None modes in the state."""
+        available_modes = []
+        if self.time is not None:
+            available_modes.append("time")
+        if self.continuous is not None:
+            available_modes.append("continuous")
+        if self.discrete is not None:
+            available_modes.append("discrete")
+        return available_modes

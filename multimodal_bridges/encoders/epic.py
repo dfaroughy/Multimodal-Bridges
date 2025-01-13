@@ -44,12 +44,12 @@ class MultiModalEPiC(nn.Module):
     def forward(
         self, state_local: HybridState, state_global: HybridState
     ) -> HybridState:
-        local_cat = torch.cat(
-            [state_local.time, state_local.continuous, state_local.discrete], dim=-1
-        )
-        global_cat = torch.cat(
-            [state_global.time, state_global.continuous, state_global.discrete], dim=-1
-        )
+
+        local_modes = [getattr(state_local, mode) for mode in state_local.modes()]
+        global_modes = [getattr(state_global, mode) for mode in state_global.modes()]
+        local_cat = torch.cat(local_modes, dim=-1)
+        global_cat = torch.cat(global_modes, dim=-1)
+
         mask = state_local.mask
 
         h = self.epic(local_cat, global_cat, mask)

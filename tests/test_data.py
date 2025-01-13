@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from utils.misc import get_from_json
 from utils.configs import ExperimentConfigs
-from utils.dataloader import DataloaderModule
+from data.dataloader import DataloaderModule
 from data.particle_clouds.jets import JetDataModule
 from data.particle_clouds.utils import (
     map_basis_to_tokens,

@@ -12,7 +12,7 @@ from utils.registry import registered_optimizers as Optimizer
 from utils.registry import registered_schedulers as Scheduler
 
 from model.multimodal_states import HybridState
-from encoders.embedder import MultiModalPointCloudEmbedder
+from encoders.embedder import MultiModalParticleCloudEmbedder
 
 
 class MultiModalBridgeMatching(L.LightningModule):
@@ -23,7 +23,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.config = config
         self.vocab_size = config.data.vocab_size
         self.weight = getattr(config.model, "loss_weights", "fixed")
-        self.embedder = MultiModalPointCloudEmbedder(config)
+        self.embedder = MultiModalParticleCloudEmbedder(config)
         self.encoder = Encoder[config.encoder.name](config)
 
         if hasattr(config.model, "bridge_continuous"):

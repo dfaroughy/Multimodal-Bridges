@@ -5,7 +5,7 @@ from collections import namedtuple
 
 from utils.configs import ExperimentConfigs
 from multimodal_states import HybridState
-from encoders.embedder import MultiModalPointCloudEmbedder
+from encoders.embedder import MultiModalParticleCloudEmbedder
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
@@ -42,7 +42,7 @@ def dummy_state():
 
 def test_multimodal_embedder(dummy_batch, dummy_state):
     config = ExperimentConfigs(CONFIG_PATH)
-    embedder = MultiModalPointCloudEmbedder(config)
+    embedder = MultiModalParticleCloudEmbedder(config)
     state_loc, state_glob = embedder(dummy_state, dummy_batch)
 
     assert state_loc.time.shape == (

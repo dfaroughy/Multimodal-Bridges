@@ -5,7 +5,7 @@ from collections import namedtuple
 
 from utils.configs import ExperimentConfigs
 from multimodal_states import HybridState
-from encoders.embedder import MultiModalPointCloudEmbedder
+from encoders.embedder import MultiModalParticleCloudEmbedder
 from encoders.particle_transformer import MultiModalParticleTransformer
 from encoders.epic import MultiModalEPiC
 
@@ -48,7 +48,7 @@ def test_multimodal_encoder_ParT(dummy_batch, dummy_state):
     config.encoder.dim_hidden_continuous = 32
     config.encoder.dim_hidden_discrete = 16
     config.encoder.dropout = 0.2
-    embedder = MultiModalPointCloudEmbedder(config)
+    embedder = MultiModalParticleCloudEmbedder(config)
     encoder = MultiModalParticleTransformer(config)
     state_loc, state_glob = embedder(dummy_state, dummy_batch)
     head = encoder(state_loc, state_glob)
@@ -63,7 +63,7 @@ def test_multimodal_encoder_EPiC(dummy_batch, dummy_state):
     config.encoder.dim_hidden_glob = 16
     config.encoder.skip_connection = True
     config.encoder.dropout = 0.2
-    embedder = MultiModalPointCloudEmbedder(config)
+    embedder = MultiModalParticleCloudEmbedder(config)
     encoder = MultiModalEPiC(config)
     state_loc, state_glob = embedder(dummy_state, dummy_batch)
     head = encoder(state_loc, state_glob)

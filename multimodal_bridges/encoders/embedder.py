@@ -6,7 +6,7 @@ from typing import Tuple
 from model.multimodal_states import HybridState
 
 
-class MultiModalPointCloudEmbedder(nn.Module):
+class MultiModalParticleCloudEmbedder(nn.Module):
     """
     Module that embeds multimodal point cloud data into latent vector spaces for downstream tasks.
     Includes non-markovian source augmentation (optional) as in https://arxiv.org/abs/2311.06978
@@ -23,7 +23,7 @@ class MultiModalPointCloudEmbedder(nn.Module):
     """
 
     def __init__(self, config):
-        super(MultiModalPointCloudEmbedder, self).__init__()
+        super(MultiModalParticleCloudEmbedder, self).__init__()
 
         self.embedding_time = EmbedMode(
             config.encoder.embed_type_time,
@@ -91,13 +91,13 @@ class MultiModalPointCloudEmbedder(nn.Module):
 
         # Embed features
         x_feats, k_feats = [], []
-        if hasattr(self, "embedding_continuous"):
+        if hasattr(batch, "target_continuous") and hasattr(self, "embedding_continuous"):
             x_feats.append(self.embedding_continuous(state.continuous))
-        if hasattr(self, "embedding_augment_continuous"):
+        if hasattr(batch, "source_continuous") and hasattr(self, "embedding_augment_continuous"):
             x_feats.append(self.embedding_augment_continuous(batch.source_continuous))
-        if hasattr(self, "embedding_discrete"):
+        if hasattr(batch, "target_discrete") and hasattr(self, "embedding_discrete"):
             k_feats.append(self.embedding_discrete(state.discrete).view(shape))
-        if hasattr(self, "embedding_augment_discrete"):
+        if hasattr(batch, "source_discrete") and hasattr(self, "embedding_augment_discrete"):
             k_feats.append(
                 self.embedding_augment_discrete(batch.source_discrete).view(shape)
             )
@@ -109,11 +109,11 @@ class MultiModalPointCloudEmbedder(nn.Module):
             state_loc.discrete = torch.cat(k_feats, dim=-1) * state.mask
 
         # Embed context
-        if hasattr(self, "embedding_context_continuous"):
+        if hasattr(batch, "context_continuous") and hasattr(self, "embedding_context_continuous"):
             state_glob.continuous = self.embedding_context_continuous(
                 batch.context_continuous
             )
-        if hasattr(self, "embedding_context_discrete"):
+        if hasattr(batch, "context_continuous") and hasattr(self, "embedding_context_discrete"):
             state_glob.discrete = self.embedding_context_discrete(
                 batch.context_discrete
             ).view(B, -1)

@@ -8,7 +8,7 @@ from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTh
 from lightning.pytorch.utilities import rank_zero_only
 from utils.configs import ExperimentConfigs, progress_bar
 from utils.misc import SimpleLogger as log
-from utils.dataloader import DataloaderModule
+from data.dataloader import DataloaderModule
 from data.particle_clouds.jets import JetDataModule
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
 from utils.callbacks import (
