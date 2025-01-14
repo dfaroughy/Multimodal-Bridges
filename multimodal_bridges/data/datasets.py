@@ -60,7 +60,7 @@ class HybridDataset(Dataset):
             yield self[idx]
 
 
-DataCouplingBatch = namedtuple("DataCouplingBatch", ["source", "target", "context"])
+DataBatch = namedtuple("DataBatch", ["source", "target", "context"])
 
 
 def hybrid_collate_fn(batch):
@@ -110,4 +110,4 @@ def hybrid_collate_fn(batch):
         else None
     )
 
-    return DataCouplingBatch(source=source, target=target, context=context)
+    return DataBatch(source=source, target=target, context=context)
