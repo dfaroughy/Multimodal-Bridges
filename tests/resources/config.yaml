@@ -1,3 +1,19 @@
+trainer:
+  max_epochs: 10
+  gradient_clip_val: 1.0
+  optimizer_name: AdamW
+  scheduler_name: CosineAnnealingLR
+  optimizer_params:
+    lr: 0.0002
+    weight_decay: 5.0e-5
+    betas: [0.9, 0.999]
+    eps: 1.e-8
+    amsgrad: false
+  scheduler_params:
+    T_max: 100
+    eta_min: 1.0e-5
+    last_epoch: -1
+
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
   project_name: multimodal-jets
@@ -13,44 +29,24 @@ checkpoints:
   filename: best-{epoch:02d}-{val_loss:.4f}
   save_last: true
 
-trainer:
-  max_epochs: 10
-  gradient_clip_val: 1.0
-
-optimizer:
-  name: AdamW
-  params:
-    lr: 0.0002
-    weight_decay: 5.0e-5
-    betas: [0.9, 0.999]
-    eps: 1.e-8
-    amsgrad: false
-
-scheduler:
-  name: CosineAnnealingLR
-  params:
-    T_max: 1000
-    eta_min: 1.0e-5
-    last_epoch: -1
-
-datamodule:
+data:
   batch_size: 1024
-  split_ratios: [0.7, 0.2, 0.1]  # train / val / test
+  split_ratios: [0.7, 0.3]  # train / val / test
   num_workers: 0
   pin_memory: false
 
-data:
   target_name: AspenOpenJets
-  target_path: 
-    - /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
   target_preprocess_continuous: standardize
   target_preprocess_discrete: tokenize
+
   source_name: GaussNoise
-  source_path: null
+  source_train_path: null
+  source_test_path: null
   source_preprocess_continuous: null
   source_preprocess_discrete: tokenize
-  source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
-  fill_target_with_noise: false
+
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100

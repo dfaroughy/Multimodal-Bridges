@@ -7,39 +7,37 @@ checkpoints:
   save_top_k: 3
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
-  experiment_key: 0dc0951b0cb24a5db5e1a7c4cda87126
+  experiment_key: 0bfa9c6b34ca404aa91a3b0cdb5cff6e
   experiment_name: pytest
   project_name: multimodal-jets
   save_dir: /home/df630/Multimodal-Bridges/tests/output
   workspace: dfaroughy
 data:
+  batch_size: 1024
   dim_context_continuous: 0
   dim_context_discrete: 0
   dim_continuous: 3
   dim_discrete: 1
-  fill_target_with_noise: false
   max_num_particles: 128
   min_num_particles: 0
   num_jets: 100
-  source_masks_from_target_masks: true
+  num_workers: 0
+  pin_memory: false
   source_name: GaussNoise
-  source_path: null
   source_preprocess_continuous: null
   source_preprocess_discrete: tokenize
-  target_name: AspenOpenJets
-  target_path:
-  - /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
-  target_preprocess_continuous: standardize
-  target_preprocess_discrete: tokenize
-  vocab_size: 8
-  vocab_size_context: 0
-datamodule:
-  batch_size: 1024
-  num_workers: 16
+  source_test_path: null
+  source_train_path: null
   split_ratios:
   - 0.7
-  - 0.2
-  - 0.1
+  - 0.3
+  target_name: AspenOpenJets
+  target_preprocess_continuous: standardize
+  target_preprocess_discrete: tokenize
+  target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  vocab_size: 8
+  vocab_size_context: 0
 encoder:
   activation: ReLU
   dim_emb_augment_continuous: 0
@@ -79,7 +77,7 @@ optimizer:
     eps: 1.0e-08
     lr: 0.0002
     weight_decay: 5.0e-05
-path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/0dc0951b0cb24a5db5e1a7c4cda87126
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/0bfa9c6b34ca404aa91a3b0cdb5cff6e
 scheduler:
   name: CosineAnnealingLR
   params:

@@ -24,3 +24,5 @@ class SimpleLogger:
     @staticmethod
     def warnings_off():
         warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        warnings.filterwarnings("ignore", category=FutureWarning)

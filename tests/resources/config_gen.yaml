@@ -1,5 +1,9 @@
 
 data:
+  batch_size: 1024
+  split_ratios: [0.7, 0.3]  # train / val / test
+  num_workers: 0
+  pin_memory: false
   num_jets: 100
   source_name: GaussNoise
   source_path: null

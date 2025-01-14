@@ -91,10 +91,12 @@ class MultiModalBridgeMatching(L.LightningModule):
         return final_state, source_state.detach().cpu(), target_state.detach().cpu()
 
     def configure_optimizers(self):
-        conf = self.config.optimizer
-        optimizer = Optimizer[conf.name](self.parameters(), **conf.params.to_dict())
-        conf = self.config.scheduler
-        scheduler = Scheduler[conf.name](optimizer, **conf.params.to_dict())
+        name = self.config.trainer.optimizer_name
+        params = self.config.trainer.optimizer_params
+        optimizer = Optimizer[name](self.parameters(), **params.to_dict())
+        name = self.config.trainer.scheduler_name
+        params = self.config.trainer.scheduler_params
+        scheduler = Scheduler[name](optimizer, **params.to_dict())
         return [optimizer], [scheduler]
 
     # ...Model functions
