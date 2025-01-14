@@ -1,7 +1,8 @@
-dataloader:
-  batch_size: 64
-  data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
-  
+datamodule:
+  batch_size: 10
+  split_ratios: [0.7, 0.2, 0.1]  # train / val / test
+  num_workers: 4
+
 data:
   target_name: AspenOpenJets
   source_name: GaussNoise

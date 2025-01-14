@@ -11,7 +11,7 @@ from utils.registry import registered_bridges as Bridge
 from utils.registry import registered_optimizers as Optimizer
 from utils.registry import registered_schedulers as Scheduler
 
-from model.multimodal_states import HybridState
+from data.datasets import HybridState
 from encoders.embedder import MultiModalParticleCloudEmbedder
 
 
@@ -38,26 +38,26 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.save_hyperparameters()
 
     def forward(self, state: HybridState, batch) -> HybridState:
-        h_local, h_global = self.embedder(state, batch)
+        h_local, h_global = self.embedder(state, batch.source, batch.context)
         return self.encoder(h_local, h_global)
 
     def sample_bridges(self, batch) -> HybridState:
         """sample stochastic bridges"""
         continuous, discrete = None, None
-        t = torch.rand(batch.target_continuous.shape[0], device=self.device).type_as(
-            batch.target_continuous
+        t = torch.rand(batch.target.continuous.shape[0], device=self.device).type_as(
+            batch.target.continuous
         )
 
-        time = self.reshape_time(t, batch.target_continuous)
+        time = self.reshape_time(t, batch.target.continuous)
         if hasattr(self, "bridge_continuous"):
             continuous = self.bridge_continuous.sample(
-                time, batch.source_continuous, batch.target_continuous
+                time, batch.source.continuous, batch.target.continuous
             )
         if hasattr(self, "bridge_discrete"):
             discrete = self.bridge_discrete.sample(
-                time, batch.source_discrete, batch.target_discrete
+                time, batch.source.discrete, batch.target.discrete
             )
-        mask = batch.target_mask
+        mask = batch.target.mask
         return HybridState(time, continuous, discrete, mask)
 
     def loss_continuous(
@@ -69,8 +69,8 @@ class MultiModalBridgeMatching(L.LightningModule):
             targets = self.bridge_continuous.drift(
                 t=state.time,
                 x=state.continuous,
-                x0=batch.source_continuous,
-                x1=batch.target_continuous,
+                x0=batch.source.continuous,
+                x1=batch.target.continuous,
             ).to(self.device)
             loss_mse = self.loss_continuous_fn(vector, targets) * state.mask
             return loss_mse.sum() / state.mask.sum()
@@ -83,7 +83,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         """cross-entropy loss for discrete state classifier"""
         if hasattr(self, "bridge_discrete"):
             logits = heads.discrete.reshape(-1, self.vocab_size)
-            targets = batch.target_discrete.reshape(-1).long()
+            targets = batch.target.discrete.reshape(-1).long()
             targets = targets.to(self.device)
             mask = state.mask.reshape(-1)
             loss_ce = self.loss_discrete_fn(logits, targets) * mask
@@ -155,10 +155,10 @@ class MultiModalBridgeMatching(L.LightningModule):
         self, batch, batch_idx
     ) -> Tuple[HybridState, HybridState, HybridState]:
         source_state = HybridState(
-            None, batch.source_continuous, batch.source_discrete, batch.source_mask
+            None, batch.source.continuous, batch.source.discrete, batch.source.mask
         )
         target_state = HybridState(
-            None, batch.target_continuous, batch.target_discrete, batch.target_mask
+            None, batch.target.continuous, batch.target.discrete, batch.target.mask
         )
         initial_state = source_state.clone()
         final_state = self.simulate_dynamics(initial_state, batch)

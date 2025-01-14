@@ -7,8 +7,7 @@ from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 from lightning.pytorch.utilities import rank_zero_only
 from utils.configs import ExperimentConfigs, progress_bar
-from utils.misc import SimpleLogger as log
-from data.dataloader import DataloaderModule
+from utils.helpers import SimpleLogger as log
 from data.particle_clouds.jets import JetDataModule
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
 from utils.callbacks import (
@@ -81,7 +80,7 @@ class ExperimentPipeline:
         Only train the model using the configured Trainer and DataModule.
         """
         self.config.update(self.config_update, verbose=True)
-        self.dataloader = self._setup_dataloader()
+        self.datamodule = self._setup_datamodule()
         self.trainer = self._setup_trainer()
 
         if self.new_experiment:
@@ -90,8 +89,9 @@ class ExperimentPipeline:
 
         self.trainer.fit(
             model=self.model,
-            train_dataloaders=self.dataloader.train,
-            val_dataloaders=self.dataloader.valid,
+            datamodule=self.datamodule,
+            # train_dataloaders=self.dataloader.train,
+            # val_dataloaders=self.dataloader.valid,
             ckpt_path=self.ckpt_path,
         )
 
@@ -167,14 +167,24 @@ class ExperimentPipeline:
         experiment.log_parameters(self.config.to_dict())
         return CometLogger(**self.config.comet_logger.to_dict())
 
-    def _setup_dataloader(self) -> DataloaderModule:
+
+    def _setup_datamodule(self) -> JetDataModule:
         """
         Prepare the data module for training and validation datasets.
         Saves metadata for later use.
         """
-        data = JetDataModule(config=self.config, preprocess=True)
-        self.metadata = data.metadata
-        return DataloaderModule(config=self.config, datamodule=data)
+        jets = JetDataModule(config=self.config, preprocess=True)
+        self.metadata = jets.metadata
+        return jets
+
+    # def _setup_dataloader(self) -> DataloaderModule:
+    #     """
+    #     Prepare the data module for training and validation datasets.
+    #     Saves metadata for later use.
+    #     """
+    #     data = JetDataModule(config=self.config, preprocess=True)
+    #     self.metadata = data.metadata
+    #     return DataloaderModule(config=self.config, datamodule=data)
 
     def _setup_model(self) -> MultiModalBridgeMatching:
         """

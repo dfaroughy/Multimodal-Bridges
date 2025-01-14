@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, Subset
 from torch.utils.data import Dataset
 from collections import namedtuple
 
-from utils.misc import SimpleLogger as log
+from utils.helpers import SimpleLogger as log
 from utils.configs import ExperimentConfigs
 
 

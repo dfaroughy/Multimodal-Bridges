@@ -31,10 +31,11 @@ scheduler:
   eta_min: 5.0e-5
   last_epoch: -1
 
-dataloader:
-  batch_size: 64
-  data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
-  
+datamodule:
+  batch_size: 100
+  split_ratios: [0.8, 0.2, 0.0]  # train / val / test
+  num_workers: 4
+
 data:
   target_name: AspenOpenJets
   target_path: 
@@ -58,7 +59,7 @@ data:
   fill_target_with_noise: false
   min_num_particles: 0
   max_num_particles: 128
-  num_jets: 10_000
+  num_jets: 1000
   dim_continuous: 3             # pt, eta_rel, phi_phi
   dim_discrete: 1               # flavor x charge
   dim_context_continuous: 0

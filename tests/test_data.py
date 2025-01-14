@@ -3,9 +3,8 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from utils.misc import get_from_json
+from utils.helpers import get_from_json
 from utils.configs import ExperimentConfigs
-from data.dataloader import DataloaderModule
 from data.particle_clouds.jets import JetDataModule
 from data.particle_clouds.utils import (
     map_basis_to_tokens,
@@ -15,29 +14,26 @@ from data.particle_clouds.utils import (
 )
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_data.yaml")    
+OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output"
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_data.yaml")
+
 
 def test_configs():
     config = ExperimentConfigs(CONFIG_PATH)
     assert config is not None
 
 
-def test_dataloader():
-    config = ExperimentConfigs(CONFIG_PATH)
-    jets = JetDataModule(config=config)
-    dataloader = DataloaderModule(config=config, datamodule=jets)
-    assert dataloader is not None
-
-
 def test_databatch():
     config = ExperimentConfigs(CONFIG_PATH)
-    jets = JetDataModule(config=config)
-    dataloader = DataloaderModule(config=config, datamodule=jets)
-    databatch = next(dataloader.train.__iter__())
-    assert databatch is not None
-    print(len(databatch))
-    print(dataloader.dataset.attribute)
-    print(type(databatch))
+    jets = JetDataModule(config=config, preprocess=False)
+    jets.setup()
+    train_dataloader = jets.train_dataloader()
+    for batch in train_dataloader:
+        assert batch.source.continuous.shape[0] == config.datamodule.batch_size 
+        assert batch.source.continuous.shape[1] == config.data.max_num_particles
+        assert batch.source.continuous.shape[2] == config.data.dim_continuous
+        assert batch.source.discrete.shape[2] == 6
+        assert batch.source.mask.shape[2] == 1
 
 
 def test_data_shapes():
@@ -91,9 +87,11 @@ def test_data_discrete_bases():
 def test_data_processing_closure():
     config = ExperimentConfigs(CONFIG_PATH)
     jets = JetDataModule(config=config)
-    jets_preprocessed = JetDataModule(config=config, preprocess=True, metadata_path=RESOURCE_PATH)
-
-    assert jets_preprocessed.metadata_path == os.path.join(RESOURCE_PATH, 'metadata.json')
+    jets_preprocessed = JetDataModule(
+        config=config,
+        preprocess=True,
+        metadata_path=OUTPUT_PATH,
+    )
 
     N = config.data.num_jets
     M = config.data.max_num_particles
@@ -104,11 +102,11 @@ def test_data_processing_closure():
     assert torch.max(jets_preprocessed.source.discrete.squeeze(-1)).item() == V - 1
     assert torch.max(jets_preprocessed.target.discrete.squeeze(-1)).item() == V - 1
 
-    # closure test: 
+    # closure test:
 
     prep_continuous = config.data.target_preprocess_continuous
     prep_discrete = config.data.target_preprocess_discrete
-    stats = get_from_json('target_data_stats', RESOURCE_PATH, 'metadata.json')
+    stats = get_from_json("target_data_stats", OUTPUT_PATH, "metadata.json")
 
     jets_preprocessed.target.postprocess(prep_continuous, prep_discrete, **stats)
 

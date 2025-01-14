@@ -6,7 +6,6 @@ import uproot
 import h5py
 from sklearn.preprocessing import OneHotEncoder
 from torch.distributions.categorical import Categorical
-from torch.distributions.beta import Beta
 from torch.nn import functional as F
 
 vector.register_awkward()
@@ -113,11 +112,9 @@ def pad(a, min_num, max_num, value=0, dtype="float32"):
     return ak.values_astype(a, dtype)
 
 
-def extract_jetclass_features(dataset, **args):
-    max_num_particles = args.get("max_num_particles", 128)
-    min_num_particles = args.get("min_num_particles", 0)
-    num_jets = args.get("num_jets", 100_000)
-
+def extract_jetclass_features(
+    dataset, num_jets=100_000, min_num_particles=0, max_num_particles=128
+):
     if isinstance(dataset, str):
         dataset = [dataset]
     all_data = []
@@ -166,11 +163,9 @@ def extract_jetclass_features(dataset, **args):
     )
 
 
-def extract_aoj_features(dataset, **args):
-    max_num_particles = args.get("max_num_particles", 150)
-    min_num_particles = args.get("min_num_particles", 0)
-    num_jets = args.get("num_jets", 100_000)
-
+def extract_aoj_features(
+    dataset, num_jets=100_000, min_num_particles=0, max_num_particles=128
+):
     if isinstance(dataset, str):
         dataset = [dataset]
     all_data = []
@@ -219,66 +214,35 @@ def extract_aoj_features(dataset, **args):
     )
 
 
-def sample_noise(noise="GaussNoise", **args):
-    max_num_particles = args.get("max_num_particles", 128)
-    num_jets = args.get("num_jets", 100_000)
-
-    scale = args.get("scale", 1.0)
-    cat_probs = args.get("cat_probs", [0.2, 0.2, 0.2, 0.2, 0.2])
-
-    if noise == "BetaNoise":
-        concentration = args.get("concentration", [0.1, 10])
-        a, b = torch.tensor(concentration[0]), torch.tensor(concentration[1])
-        pt = Beta(a, b).sample((num_jets, max_num_particles, 1))
-        eta_phi = torch.randn((num_jets, max_num_particles, 2)) * scale
-        continuous = torch.cat([pt, eta_phi], dim=2)
-    elif noise == "GaussNoise":
-        continuous = torch.randn((num_jets, max_num_particles, 3)) * scale
-    else:
-        raise ValueError(
-            'Noise type not recognized. Choose between "GaussNoise" and "BetaNoise".'
-        )
-
+def sample_noise(num_jets=100_000, max_num_particles=128):
+    continuous = torch.randn((num_jets, max_num_particles, 3))
     flavor = np.random.choice(
-        [0, 1, 2, 3, 4], size=(num_jets, max_num_particles), p=cat_probs
+        [0, 1, 2, 3, 4], size=(num_jets, max_num_particles), p=[0.2, 0.2, 0.2, 0.2, 0.2]
     )
     charge = np.random.choice([-1, 1], size=(num_jets, max_num_particles))
     charge[flavor == 0] = charge[flavor == 1] = 0
     flavor = F.one_hot(torch.tensor(flavor), num_classes=5)
     charge = torch.tensor(charge).unsqueeze(-1)
     discrete = torch.cat([flavor, charge], dim=-1).long()
-    # discrete = torch.tensor(discrete).long()
     return continuous, discrete
 
 
-def sample_masks(**args):
+def sample_masks(
+    multiplicity_dist=None, num_jets=100_000, min_num_particles=0, max_num_particles=128
+):
     """Sample masks from empirical multiplicity distribution `hist`."""
-    hist = args.get("target_multiplicity", None)
-    min_num_particles = args.get("min_num_particles", 128)
-    max_num_particles = args.get("max_num_particles", 128)
-    num_jets = args.get("num_jets", 100_000)
 
-    if hist is None:
+    if multiplicity_dist is None:
         return torch.ones((num_jets, max_num_particles, 1)).long()
     elif min_num_particles == max_num_particles:
         return torch.ones((num_jets, max_num_particles, 1)).long()
     else:
-        hist_values, bin_edges = np.histogram(
-            hist, bins=np.arange(0, max_num_particles + 2, 1), density=True
+        hist_values, _ = np.histogram(
+            multiplicity_dist, bins=np.arange(0, max_num_particles + 2, 1), density=True
         )
-        bin_edges[0] = np.floor(
-            bin_edges[0]
-        )  # Ensure lower bin includes the floor of the lowest value
-        bin_edges[-1] = np.ceil(
-            bin_edges[-1]
-        )  # Extend the upper bin edge to capture all values
-
-        h = torch.tensor(hist_values, dtype=torch.float)
-        probs = h / h.sum()
+        probs = torch.tensor(hist_values, dtype=torch.float)
         cat = Categorical(probs)
         multiplicity = cat.sample((num_jets,))
-
-        # Initialize masks and apply the sampled multiplicities
         masks = torch.zeros((num_jets, max_num_particles))
         for i, n in enumerate(multiplicity):
             masks[i, :n] = 1

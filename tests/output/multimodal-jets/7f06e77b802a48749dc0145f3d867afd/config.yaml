@@ -1,0 +1,92 @@
+checkpoints:
+  dirpath: null
+  filename: best-{epoch:02d}-{val_loss:.4f}
+  mode: min
+  monitor: val_loss
+  save_last: true
+  save_top_k: 3
+comet_logger:
+  api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
+  experiment_key: 7f06e77b802a48749dc0145f3d867afd
+  experiment_name: pytest
+  project_name: multimodal-jets
+  save_dir: /home/df630/Multimodal-Bridges/tests/output
+  workspace: dfaroughy
+data:
+  dim_context_continuous: 0
+  dim_context_discrete: 0
+  dim_continuous: 3
+  dim_discrete: 1
+  fill_target_with_noise: false
+  max_num_particles: 128
+  min_num_particles: 0
+  num_jets: 100
+  source_masks_from_target_masks: true
+  source_name: GaussNoise
+  source_path: null
+  source_preprocess_continuous: null
+  source_preprocess_discrete: tokenize
+  target_name: AspenOpenJets
+  target_path:
+  - /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_preprocess_continuous: standardize
+  target_preprocess_discrete: tokenize
+  vocab_size: 8
+  vocab_size_context: 0
+datamodule:
+  batch_size: 1024
+  num_workers: 4
+  pin_memory: true
+  split_ratios:
+  - 0.7
+  - 0.2
+  - 0.1
+encoder:
+  activation: ReLU
+  dim_emb_augment_continuous: 0
+  dim_emb_augment_discrete: 0
+  dim_emb_context_continuous: 0
+  dim_emb_context_discrete: 0
+  dim_emb_continuous: 16
+  dim_emb_discrete: 16
+  dim_emb_time: 16
+  dim_hidden_continuous: 32
+  dim_hidden_discrete: 32
+  dropout: 0.2
+  embed_type_augment_continuous: null
+  embed_type_augment_discrete: null
+  embed_type_context_continuous: null
+  embed_type_context_discrete: null
+  embed_type_continuous: Linear
+  embed_type_discrete: LookupTable
+  embed_type_time: SinusoidalPositionalEncoding
+  name: MultiModalParticleTransformer
+  num_heads: 4
+model:
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+  gamma: 0.125
+  loss_weights: learnable
+  num_timesteps: 100
+  sigma: 0.0001
+  time_eps: 0.0001
+optimizer:
+  name: AdamW
+  params:
+    amsgrad: false
+    betas:
+    - 0.9
+    - 0.999
+    eps: 1.0e-08
+    lr: 0.0002
+    weight_decay: 5.0e-05
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/7f06e77b802a48749dc0145f3d867afd
+scheduler:
+  name: CosineAnnealingLR
+  params:
+    T_max: 1000
+    eta_min: 1.0e-05
+    last_epoch: -1
+trainer:
+  gradient_clip_val: 1.0
+  max_epochs: 10

@@ -2,7 +2,7 @@ comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
   project_name: multimodal-jets
   workspace: dfaroughy
-  save_dir: /home/df630/Multimodal-Bridges/tests/resources/output
+  save_dir: /home/df630/Multimodal-Bridges/tests/output
   experiment_name: pytest
     
 checkpoints:
@@ -33,25 +33,16 @@ scheduler:
     eta_min: 1.0e-5
     last_epoch: -1
 
-dataloader:
+datamodule:
   batch_size: 1024
-  data_split_frac: [0.8, 0.2, 0.0]  # train / val / test
-  
+  split_ratios: [0.7, 0.2, 0.1]  # train / val / test
+  num_workers: 0
+  pin_memory: false
+
 data:
   target_name: AspenOpenJets
   target_path: 
     - /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
-
-    # - /home/df630/CMB/data/AOJ/2016H_job0.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job1.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job2.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job3.h5 
-    # - /home/df630/CMB/data/AOJ/2016H_job4.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job5.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job6.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job7.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job8.h5
-    # - /home/df630/CMB/data/AOJ/2016H_job9.h5
   target_preprocess_continuous: standardize
   target_preprocess_discrete: tokenize
   source_name: GaussNoise

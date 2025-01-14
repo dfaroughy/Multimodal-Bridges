@@ -102,10 +102,10 @@ class TelegraphBridge:
         k: (b, n, 1) current state tensor
         logits: (b, n, vocab_size) logits tensor
         """
-        assert (k >= 0).all() and (
-            k < self.vocab_size
-        ).all(), "Values in `k` outside of bound! k_min={}, k_max={}".format(
-            k.min(), k.max()
+        assert (k >= 0).all() and (k < self.vocab_size).all(), (
+            "Values in `k` outside of bound! k_min={}, k_max={}".format(
+                k.min(), k.max()
+            )
         )
 
         qx = softmax(
@@ -199,4 +199,3 @@ right_time_size = (
     if isinstance(t, torch.Tensor)
     else torch.full((x.size(0),), t).to(x.device)
 )
-

@@ -1,0 +1,20 @@
+
+data:
+  num_jets: 100
+  source_name: GaussNoise
+  source_path: null
+  source_preprocess_continuous: null
+  source_preprocess_discrete: tokenize
+  source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
+  target_name: AspenOpenJets
+  target_path: 
+    - /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+
+model:
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+  loss_weights: 'learnable'
+  sigma: 0.0001
+  gamma: 0.125
+  num_timesteps: 100
+  time_eps: 0.0001

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from model.multimodal_states import HybridState
+from data.datasets import HybridState
 
 
 class MultiModalParticleTransformer(nn.Module):

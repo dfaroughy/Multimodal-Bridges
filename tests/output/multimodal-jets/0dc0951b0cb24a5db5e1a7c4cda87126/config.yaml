@@ -7,10 +7,10 @@ checkpoints:
   save_top_k: 3
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
-  experiment_key: b9430ef34f0e48da987ea80e495b4263
+  experiment_key: 0dc0951b0cb24a5db5e1a7c4cda87126
   experiment_name: pytest
   project_name: multimodal-jets
-  save_dir: /home/df630/Multimodal-Bridges/tests/resources/output
+  save_dir: /home/df630/Multimodal-Bridges/tests/output
   workspace: dfaroughy
 data:
   dim_context_continuous: 0
@@ -33,12 +33,13 @@ data:
   target_preprocess_discrete: tokenize
   vocab_size: 8
   vocab_size_context: 0
-dataloader:
+datamodule:
   batch_size: 1024
-  data_split_frac:
-  - 0.8
+  num_workers: 16
+  split_ratios:
+  - 0.7
   - 0.2
-  - 0.0
+  - 0.1
 encoder:
   activation: ReLU
   dim_emb_augment_continuous: 0
@@ -78,7 +79,7 @@ optimizer:
     eps: 1.0e-08
     lr: 0.0002
     weight_decay: 5.0e-05
-path: /home/df630/Multimodal-Bridges/tests/resources/output/multimodal-jets/b9430ef34f0e48da987ea80e495b4263
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/0dc0951b0cb24a5db5e1a7c4cda87126
 scheduler:
   name: CosineAnnealingLR
   params:

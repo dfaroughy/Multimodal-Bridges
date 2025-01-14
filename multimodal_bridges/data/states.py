@@ -1,7 +1,6 @@
 import torch
 from dataclasses import dataclass
 from typing import List
-import h5py
 
 
 @dataclass
@@ -12,6 +11,9 @@ class HybridState:
     continuous: torch.Tensor = None
     discrete: torch.Tensor = None
     mask: torch.Tensor = None
+
+    def mask_modes(self):
+        return self._apply(lambda tensor: tensor[self.mask.squeeze(-1) > 0])
 
     def to(self, device: str):
         return self._apply(lambda tensor: tensor.to(device))
@@ -62,18 +64,9 @@ class HybridState:
             mask=func(self.mask) if isinstance(self.mask, torch.Tensor) else None,
         )
 
-    def save_to(self, file_path):
-        with h5py.File(file_path, "w") as f:
-            if self.time is not None:
-                f.create_dataset("time", data=self.time.cpu().numpy())
-            if self.continuous is not None:
-                f.create_dataset("continuous", data=self.continuous.cpu().numpy())
-            if self.discrete is not None:
-                f.create_dataset("discrete", data=self.discrete.cpu().numpy())
-            if self.mask is not None:
-                f.create_dataset("mask", data=self.mask.cpu().numpy())
-
-    def modes(self, ) -> List[str]:
+    def modes(
+        self,
+    ) -> List[str]:
         """Return a list of non-None modes in the state."""
         available_modes = []
         if self.time is not None:
@@ -83,3 +76,4 @@ class HybridState:
         if self.discrete is not None:
             available_modes.append("discrete")
         return available_modes
+

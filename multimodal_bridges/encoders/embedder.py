@@ -3,7 +3,7 @@ import math
 from torch import nn
 from typing import Tuple
 
-from model.multimodal_states import HybridState
+from data.datasets import HybridState
 
 
 class MultiModalParticleCloudEmbedder(nn.Module):
@@ -74,7 +74,9 @@ class MultiModalParticleCloudEmbedder(nn.Module):
                     dim_hidden=config.encoder.dim_emb_context_discrete,
                 )
 
-    def forward(self, state: HybridState, batch) -> Tuple[HybridState, HybridState]:
+    def forward(
+        self, state: HybridState, source: HybridState, context: HybridState
+    ) -> Tuple[HybridState, HybridState]:
         B = state.mask.shape[0]
         N = state.mask.shape[1]
         shape = (B, N, -1) if state.mask.ndim == 3 else (B, -1)
@@ -91,16 +93,14 @@ class MultiModalParticleCloudEmbedder(nn.Module):
 
         # Embed features
         x_feats, k_feats = [], []
-        if hasattr(batch, "target_continuous") and hasattr(self, "embedding_continuous"):
+        if hasattr(self, "embedding_continuous"):
             x_feats.append(self.embedding_continuous(state.continuous))
-        if hasattr(batch, "source_continuous") and hasattr(self, "embedding_augment_continuous"):
-            x_feats.append(self.embedding_augment_continuous(batch.source_continuous))
-        if hasattr(batch, "target_discrete") and hasattr(self, "embedding_discrete"):
+        if hasattr(self, "embedding_augment_continuous"):
+            x_feats.append(self.embedding_augment_continuous(source.continuous))
+        if hasattr(self, "embedding_discrete"):
             k_feats.append(self.embedding_discrete(state.discrete).view(shape))
-        if hasattr(batch, "source_discrete") and hasattr(self, "embedding_augment_discrete"):
-            k_feats.append(
-                self.embedding_augment_discrete(batch.source_discrete).view(shape)
-            )
+        if hasattr(self, "embedding_augment_discrete"):
+            k_feats.append(self.embedding_augment_discrete(source.discrete).view(shape))
 
         # Assign embedded features
         if x_feats:
@@ -109,13 +109,13 @@ class MultiModalParticleCloudEmbedder(nn.Module):
             state_loc.discrete = torch.cat(k_feats, dim=-1) * state.mask
 
         # Embed context
-        if hasattr(batch, "context_continuous") and hasattr(self, "embedding_context_continuous"):
+        if hasattr(self, "embedding_context_continuous"):
             state_glob.continuous = self.embedding_context_continuous(
-                batch.context_continuous
+                context.continuous
             )
-        if hasattr(batch, "context_continuous") and hasattr(self, "embedding_context_discrete"):
+        if hasattr(self, "embedding_context_discrete"):
             state_glob.discrete = self.embedding_context_discrete(
-                batch.context_discrete
+                context.discrete
             ).view(B, -1)
 
         return state_loc, state_glob

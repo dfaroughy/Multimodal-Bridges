@@ -1,6 +1,6 @@
 import yaml
 import os
-from utils.misc import SimpleLogger as log
+from utils.helpers import SimpleLogger as log
 
 
 class ExperimentConfigs:

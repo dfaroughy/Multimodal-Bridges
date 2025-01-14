@@ -10,6 +10,7 @@ from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 from lightning.pytorch.utilities import rank_zero_only
 
 from utils.configs import ExperimentConfigs
+from utils.helpers import get_from_json
 from data.particle_clouds.particles import ParticleClouds
 from data.particle_clouds.jets import JetClassHighLevelFeatures
 from model.multimodal_bridge_matching import HybridState
@@ -131,9 +132,6 @@ class JetsGenerativeCallback(Callback):
         self.metric_dir = os.path.join(self.config.path, "metrics")
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.metric_dir, exist_ok=True)
-        #...load metadata for postprocessing
-        # with open(os.path.join(self.config.path, "metadata.json"), "r") as f:
-
 
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
@@ -145,8 +143,10 @@ class JetsGenerativeCallback(Callback):
         # ...generated sample
         gen_sample = HybridState.cat(self.batched_gen_states)
         self.gen_sample = ParticleClouds(dataset=gen_sample)
-        self.gen_sample.stats = self.config.data.target.preprocess.stats.to_dict()
-        self.gen_sample.postprocess()
+        prep_continuous = self.config.data.target_preprocess_continuous
+        prep_discrete = self.config.data.target_preprocess_discrete
+        stats = get_from_json('target_data_stats', self.config.path, 'metadata.json')
+        self.gen_sample.postprocess(prep_continuous, prep_discrete, **stats)
         gen_jets = JetClassHighLevelFeatures(constituents=self.gen_sample)
 
         # ...test sample
@@ -155,7 +155,6 @@ class JetsGenerativeCallback(Callback):
         test_jets = JetClassHighLevelFeatures(constituents=self.test_sample)
 
         # ...log results
-
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
         self.gen_sample.save_to(path=os.path.join(self.data_dir, "generated_sample.h5"))
         self.test_sample.save_to(path=os.path.join(self.data_dir, "test_sample.h5"))

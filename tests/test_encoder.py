@@ -4,7 +4,7 @@ import torch
 from collections import namedtuple
 
 from utils.configs import ExperimentConfigs
-from multimodal_states import HybridState
+from data.states import HybridState
 from encoders.embedder import MultiModalParticleCloudEmbedder
 from encoders.particle_transformer import MultiModalParticleTransformer
 from encoders.epic import MultiModalEPiC
@@ -12,25 +12,36 @@ from encoders.epic import MultiModalEPiC
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
 
-
 @pytest.fixture
 def dummy_batch():
+
     DummyBatch = namedtuple(
         "DummyBatch",
         [
-            "source_continuous",
-            "source_discrete",
-            "context_continuous",
-            "context_discrete",
+            "source",
+            "target",
+            "context",
         ],
     )
-    return DummyBatch(
-        source_continuous=torch.randn(100, 128, 3),
-        source_discrete=torch.randint(0, 8, (100, 128, 2)),
-        context_continuous=torch.randn(100, 5),
-        context_discrete=torch.randint(0, 7, (100, 4)),
+    source = HybridState(
+        time=None,
+        continuous=torch.randn(100, 128, 3),
+        discrete=torch.randint(0, 8, (100, 128, 2)),
+        mask=torch.ones(100, 128, 1),
     )
-
+    target = HybridState(
+        time=None,
+        continuous=torch.randn(100, 128, 3),
+        discrete=torch.randint(0, 8, (100, 128, 2)),
+        mask=torch.ones(100, 128, 1),
+    )
+    context = HybridState(
+        time=None,
+        continuous=torch.randn(100, 5),
+        discrete=torch.randint(0, 7, (100, 4)),
+        mask=None,
+    )
+    return DummyBatch(source, target, context)
 
 @pytest.fixture
 def dummy_state():
@@ -50,7 +61,7 @@ def test_multimodal_encoder_ParT(dummy_batch, dummy_state):
     config.encoder.dropout = 0.2
     embedder = MultiModalParticleCloudEmbedder(config)
     encoder = MultiModalParticleTransformer(config)
-    state_loc, state_glob = embedder(dummy_state, dummy_batch)
+    state_loc, state_glob = embedder(dummy_state, dummy_batch.source, dummy_batch.context)
     head = encoder(state_loc, state_glob)
     assert head.continuous is not None
     assert head.discrete is not None
@@ -65,7 +76,7 @@ def test_multimodal_encoder_EPiC(dummy_batch, dummy_state):
     config.encoder.dropout = 0.2
     embedder = MultiModalParticleCloudEmbedder(config)
     encoder = MultiModalEPiC(config)
-    state_loc, state_glob = embedder(dummy_state, dummy_batch)
+    state_loc, state_glob = embedder(dummy_state, dummy_batch.source, dummy_batch.context)
     head = encoder(state_loc, state_glob)
     assert head.continuous is not None
     assert head.discrete is not None

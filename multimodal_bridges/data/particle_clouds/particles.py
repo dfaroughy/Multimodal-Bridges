@@ -1,13 +1,12 @@
 import torch
 import seaborn as sns
 import matplotlib.pyplot as plt
-from matplotlib.lines import Line2D
-import h5py
+import numpy as np
 
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
-from model.multimodal_states import HybridState
+from data.states import HybridState
 from data.particle_clouds.utils import (
     extract_jetclass_features,
     extract_aoj_features,
@@ -15,13 +14,21 @@ from data.particle_clouds.utils import (
     sample_masks,
     map_basis_to_tokens,
     map_tokens_to_basis,
-    map_basis_to_onehot,
-    map_onehot_to_basis,
 )
 
 
 class ParticleClouds:
-    def __init__(self, dataset="JetClass", data_paths=None, **data_params):
+    def __init__(
+        self,
+        dataset="JetClass",
+        path=None,
+        num_jets=100_000,
+        min_num_particles=0,
+        max_num_particles=128,
+        multiplicity_dist=None,
+    ):
+        self.max_num_particles = max_num_particles
+
         if isinstance(dataset, torch.Tensor):
             self.continuous, self.discrete, self.mask = (
                 dataset[..., :3],
@@ -39,29 +46,31 @@ class ParticleClouds:
                 del self.discrete
 
         elif "JetClass" in dataset:
-            assert data_paths is not None, "Specify the path to the JetClass dataset"
+            assert path is not None, "Specify the path to the JetClass dataset"
             self.continuous, self.discrete, self.mask = extract_jetclass_features(
-                data_paths, **data_params
+                path,
+                num_jets,
+                min_num_particles,
+                max_num_particles,
             )
 
         elif "AspenOpenJets" in dataset:
-            assert data_paths is not None, "Specify the path to the AOJ dataset"
+            assert path is not None, "Specify the path to the AOJ dataset"
             self.continuous, self.discrete, self.mask = extract_aoj_features(
-                data_paths, **data_params
+                path,
+                num_jets,
+                min_num_particles,
+                max_num_particles,
             )
-            if data_params.get("fill_target_with_noise", False):
-                print("INFO: Filling target with noise")
-                # ...sample noise
-                noise_continuous = torch.randn_like(self.continuous)
-                noise_discrete = torch.randint_like(self.mask, 0, 8)
-                noise_discrete = map_tokens_to_basis(noise_discrete)
-                # ...fill target with noise:
-                self.continuous += noise_continuous * ~(self.mask > 0)
-                self.discrete += noise_discrete * ~(self.mask > 0)
 
         elif "Noise" in dataset:
-            self.continuous, self.discrete = sample_noise(dataset, **data_params)
-            self.mask = sample_masks(**data_params)
+            self.continuous, self.discrete = sample_noise(num_jets, max_num_particles)
+            self.mask = sample_masks(
+                multiplicity_dist,
+                num_jets,
+                min_num_particles,
+                max_num_particles,
+            )
             self.continuous *= self.mask
             self.discrete *= self.mask
 
@@ -73,7 +82,6 @@ class ParticleClouds:
         self.multiplicity = torch.sum(self.mask, dim=1)
         self.mask_bool = self.mask.squeeze(-1) > 0
 
-
     def __len__(self):
         return self.continuous.shape[0]
 
@@ -84,11 +92,17 @@ class ParticleClouds:
         self.e = self.pt * torch.cosh(self.eta_rel)
 
     def get_data_stats(self):
+        hist, _ = np.histogram(
+            self.multiplicity,
+            bins=np.arange(0, self.max_num_particles + 2, 1),
+            density=True,
+        )
         return {
             "mean": self.continuous[self.mask_bool].mean(0).tolist(),
             "std": self.continuous[self.mask_bool].std(0).tolist(),
             "min": self.continuous[self.mask_bool].min(0).values.tolist(),
             "max": self.continuous[self.mask_bool].max(0).values.tolist(),
+            "multinomial_num_particles": hist.tolist(),
             "num_particles_mean": torch.mean(
                 self.multiplicity.squeeze(-1).float()
             ).item(),
