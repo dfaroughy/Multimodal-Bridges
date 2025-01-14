@@ -1,5 +1,6 @@
 import json
 import os
+import warnings
 
 
 def get_from_json(key, path, name="metadata.json"):
@@ -19,3 +20,7 @@ class SimpleLogger:
     def warn(message):
         print("\033[31m\033[1mWARNING: \033[0m\033[00m", message)
         return
+
+    @staticmethod
+    def warnings_off():
+        warnings.filterwarnings("ignore", category=UserWarning)

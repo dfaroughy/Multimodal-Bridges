@@ -1,11 +1,12 @@
 import os
 import pytest
 import torch
-from collections import namedtuple
-
 from utils.configs import ExperimentConfigs
 from data.states import HybridState
+from data.datasets import DataBatch
 from encoders.embedder import MultiModalParticleCloudEmbedder
+from utils.helpers import SimpleLogger as log
+log.warnings_off()
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
@@ -14,14 +15,6 @@ CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
 @pytest.fixture
 def dummy_batch():
 
-    DummyBatch = namedtuple(
-        "DummyBatch",
-        [
-            "source",
-            "target",
-            "context",
-        ],
-    )
     source = HybridState(
         time=None,
         continuous=torch.randn(100, 128, 3),
@@ -40,7 +33,7 @@ def dummy_batch():
         discrete=torch.randint(0, 7, (100, 4)),
         mask=None,
     )
-    return DummyBatch(source, target, context)
+    return DataBatch(source, target, context)
 
 @pytest.fixture
 def dummy_state():

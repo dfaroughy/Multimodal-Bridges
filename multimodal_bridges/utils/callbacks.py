@@ -11,6 +11,7 @@ from lightning.pytorch.utilities import rank_zero_only
 
 from utils.configs import ExperimentConfigs
 from utils.helpers import get_from_json
+from utils.helpers import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
 from data.particle_clouds.jets import JetClassHighLevelFeatures
 from model.multimodal_bridge_matching import HybridState
@@ -77,6 +78,7 @@ class ExperimentLoggerCallback(Callback):
             trainer.config.save(Path(trainer.config.path))
             with open(Path(trainer.config.path) / "metadata.json", "w") as f:
                 json.dump(trainer.metadata, f, indent=4)
+            log.info("Config file and metadata save to experiment path.")
 
     def _track_metrics(self, stage: str, outputs: Dict[str, torch.Tensor]):
         """
@@ -161,7 +163,7 @@ class JetsGenerativeCallback(Callback):
         with open(os.path.join(self.metric_dir, "performance_metrics.h5"), "w") as f:
             json.dump(metrics, f, indent=4)
 
-        if hasattr(self.config.experiment, "comet_logger"):
+        if hasattr(self.config, "comet_logger"):
             figures = self.get_results_plots(gen_jets, test_jets)
             trainer.logger.experiment.log_metrics(metrics)
             for key in figures.keys():

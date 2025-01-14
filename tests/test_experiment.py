@@ -1,7 +1,11 @@
 import os
 import pytest
-from utils.experiment_pipeline import ExperimentPipeline
 import shutil
+from utils.experiment_pipeline import ExperimentPipeline
+from data.particle_clouds.jets import JetDataModule
+from utils.helpers import SimpleLogger as log
+log.warnings_off()
+
 
 RES_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output"
@@ -9,15 +13,16 @@ OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output"
 
 def test_new_experiment():
     CONFIG_PATH = os.path.join(RES_PATH, "config.yaml")
-    new_exp = ExperimentPipeline(config=CONFIG_PATH)
+    new_exp = ExperimentPipeline(JetDataModule, config=CONFIG_PATH)
     new_exp.train()
     # shutil.rmtree(new_exp.trainer.config.path)
 
 
 def test_resume_from_checkpoint():
-    EXP_PATH = f"{OUTPUT_PATH}/multimodal-jets/c703493ef98441a690a4591748957abb"
+    EXP_PATH = f"{OUTPUT_PATH}/multimodal-jets/0bfa9c6b34ca404aa91a3b0cdb5cff6e"
     resume_exp = ExperimentPipeline(
-        config={"trainer": {"max_epochs": 45}},
+        JetDataModule,
+        config={"trainer": {"max_epochs": 50}},
         experiment_path=EXP_PATH,
         load_ckpt="last.ckpt",
     )
@@ -25,17 +30,15 @@ def test_resume_from_checkpoint():
 
 
 def test_experiment_generation():
-    EXP_PATH = f"{OUTPUT_PATH}/multimodal-jets/c703493ef98441a690a4591748957abb"
-    CONFIG_PATH = f"{RES_PATH}/config_gen.yaml"
+    EXP_PATH = f"{OUTPUT_PATH}/multimodal-jets/0bfa9c6b34ca404aa91a3b0cdb5cff6e"
     pipeline = ExperimentPipeline(
-        config=CONFIG_PATH,
+        JetDataModule,
         experiment_path=EXP_PATH,
-        load_ckpt="last.ckpt"
+        load_ckpt="last.ckpt",
+        devices=[0],
     )
     pipeline.generate()
 
 
 if __name__ == "__main__":
-    test_new_experiment()
-    # test_resume_from_checkpoint()
-    # test_experiment_generation()
+    test_experiment_generation()
