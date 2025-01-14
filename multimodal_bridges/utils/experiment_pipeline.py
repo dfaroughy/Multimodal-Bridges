@@ -6,9 +6,9 @@ import lightning.pytorch as L
 from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 from lightning.pytorch.utilities import rank_zero_only
+
 from utils.configs import ExperimentConfigs, progress_bar
 from utils.helpers import SimpleLogger as log
-from data.particle_clouds.jets import JetDataModule
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
 from utils.callbacks import (
     ModelCheckpointCallback,
@@ -24,6 +24,7 @@ class ExperimentPipeline:
 
     def __init__(
         self,
+        datamodule: L.LightningDataModule,
         config: str = None,
         experiment_path: str = None,
         load_ckpt: str = "last.ckpt",
@@ -49,6 +50,7 @@ class ExperimentPipeline:
             config_update (dict): override model/data/train config matching keys.
         """
 
+        self.datamodule = datamodule
         self.accelerator = accelerator
         self.strategy = strategy
         self.devices = devices
@@ -74,13 +76,14 @@ class ExperimentPipeline:
             self.logger = self._setup_logger(new_experiment=False)
 
         self.callbacks = self._setup_callbacks_list()
+        self.config.update(self.config_update, verbose=True)
+        self.datamodule = self._setup_datamodule()
 
     def train(self):
         """
         Only train the model using the configured Trainer and DataModule.
         """
-        self.config.update(self.config_update, verbose=True)
-        self.datamodule = self._setup_datamodule()
+
         self.trainer = self._setup_trainer()
 
         if self.new_experiment:
@@ -90,8 +93,6 @@ class ExperimentPipeline:
         self.trainer.fit(
             model=self.model,
             datamodule=self.datamodule,
-            # train_dataloaders=self.dataloader.train,
-            # val_dataloaders=self.dataloader.valid,
             ckpt_path=self.ckpt_path,
         )
 
@@ -99,18 +100,12 @@ class ExperimentPipeline:
         """
         Generate new target data from (pre) trained model using test source data.
         """
-        self.config.data.remove("target_path")
-        self.config.data.remove("target_preprocess_continuous")
-        self.config.data.remove("target_preprocess_discrete")
-        self.config.dataloader.data_split_frac = [0.0, 0.0, 1.0]  # test only dataloader
-        self.config.update(self.config_update, verbose=True)
-        assert self.config.data.target_path, (
-            "provide a valid target test data path in config_update!"
+        self.generator = self._setup_trainer()
+        self.generator.predict(
+            self.model,
+            datamodule=self.datamodule,
+            ckpt_path=self.ckpt_path,
         )
-
-        self.dataloader = self._setup_dataloader()
-        self.trainer = self._setup_trainer()
-        self.trainer.predict(self.model, dataloaders=self.dataloader.test)
 
     # ...helper methods
 
@@ -167,24 +162,14 @@ class ExperimentPipeline:
         experiment.log_parameters(self.config.to_dict())
         return CometLogger(**self.config.comet_logger.to_dict())
 
-
-    def _setup_datamodule(self) -> JetDataModule:
+    def _setup_datamodule(self):
         """
         Prepare the data module for training and validation datasets.
         Saves metadata for later use.
         """
-        jets = JetDataModule(config=self.config, preprocess=True)
-        self.metadata = jets.metadata
-        return jets
-
-    # def _setup_dataloader(self) -> DataloaderModule:
-    #     """
-    #     Prepare the data module for training and validation datasets.
-    #     Saves metadata for later use.
-    #     """
-    #     data = JetDataModule(config=self.config, preprocess=True)
-    #     self.metadata = data.metadata
-    #     return DataloaderModule(config=self.config, datamodule=data)
+        data = self.datamodule(config=self.config)
+        self.metadata = data.metadata
+        return data
 
     def _setup_model(self) -> MultiModalBridgeMatching:
         """

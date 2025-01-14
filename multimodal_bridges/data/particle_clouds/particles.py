@@ -2,6 +2,7 @@ import torch
 import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
+import h5py
 
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
@@ -110,6 +111,15 @@ class ParticleClouds:
                 self.multiplicity.squeeze(-1).float()
             ).item(),
         }
+
+    def save_to(self, path):
+        with h5py.File(path, "w") as f:
+            if self.continuous is not None:
+                f.create_dataset("continuous", data=self.continuous)
+            if self.discrete is not None:
+                f.create_dataset("discrete", data=self.discrete)
+            if self.mask is not None:
+                f.create_dataset("mask", data=self.mask)
 
     #############################
     # ...data processing methods

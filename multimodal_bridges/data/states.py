@@ -27,6 +27,9 @@ class HybridState:
     def clone(self):
         return self._apply(lambda tensor: tensor.clone())
 
+    def __len__(self):
+        return len(getattr(self, self.modes()[0]))
+
     @property
     def device(self):
         return (

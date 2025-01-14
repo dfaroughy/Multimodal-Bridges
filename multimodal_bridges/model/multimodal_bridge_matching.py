@@ -11,7 +11,9 @@ from utils.registry import registered_bridges as Bridge
 from utils.registry import registered_optimizers as Optimizer
 from utils.registry import registered_schedulers as Scheduler
 
-from data.datasets import HybridState
+from data.states import HybridState
+from data.datasets import DataBatch
+
 from encoders.embedder import MultiModalParticleCloudEmbedder
 
 
@@ -37,11 +39,67 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.loss_multimode = MultiModeLoss(mode=self.weight)
         self.save_hyperparameters()
 
-    def forward(self, state: HybridState, batch) -> HybridState:
+    def forward(self, state: HybridState, batch: DataBatch) -> HybridState:
         h_local, h_global = self.embedder(state, batch.source, batch.context)
         return self.encoder(h_local, h_global)
 
-    def sample_bridges(self, batch) -> HybridState:
+    # ...Lightning functions
+
+    def training_step(self, batch: DataBatch, batch_idx) -> Dict[str, torch.Tensor]:
+        state = self.sample_bridges(batch)
+        state = state.to(self.device)
+        heads = self.forward(state, batch)
+        loss_0 = self.loss_continuous(heads, state, batch)
+        loss_1 = self.loss_discrete(heads, state, batch)
+        loss, loss_individual = self.loss_multimode([loss_0, loss_1])
+        weights = self.loss_multimode.get_weights()
+        return {
+            "loss": loss,
+            "train_loss_continuous": loss_individual[0],
+            "train_loss_discrete": loss_individual[1],
+            "weights_continuous": weights[0],
+            "weights_discrete": weights[1],
+        }
+
+    def validation_step(self, batch: DataBatch, batch_idx) -> Dict[str, torch.Tensor]:
+        state = self.sample_bridges(batch)
+        state = state.to(self.device)
+        heads = self.forward(state, batch)
+        loss_0 = self.loss_continuous(heads, state, batch)
+        loss_1 = self.loss_discrete(heads, state, batch)
+        loss, loss_individual = self.loss_multimode([loss_0, loss_1])
+        weights = self.loss_multimode.get_weights()
+        return {
+            "val_loss": loss,
+            "val_loss_continuous": loss_individual[0],
+            "val_loss_discrete": loss_individual[1],
+            "weights_continuous": weights[0],
+            "weights_discrete": weights[1],
+        }
+
+    def predict_step(
+        self, batch: DataBatch, batch_idx
+    ) -> Tuple[HybridState, HybridState, HybridState]:
+        source_state = HybridState(
+            None, batch.source.continuous, batch.source.discrete, batch.source.mask
+        )
+        target_state = HybridState(
+            None, batch.target.continuous, batch.target.discrete, batch.target.mask
+        )
+        initial_state = source_state.clone()
+        final_state = self.simulate_dynamics(initial_state, batch)
+        return final_state, source_state.detach().cpu(), target_state.detach().cpu()
+
+    def configure_optimizers(self):
+        conf = self.config.optimizer
+        optimizer = Optimizer[conf.name](self.parameters(), **conf.params.to_dict())
+        conf = self.config.scheduler
+        scheduler = Scheduler[conf.name](optimizer, **conf.params.to_dict())
+        return [optimizer], [scheduler]
+
+    # ...Model functions
+
+    def sample_bridges(self, batch: DataBatch) -> HybridState:
         """sample stochastic bridges"""
         continuous, discrete = None, None
         t = torch.rand(batch.target.continuous.shape[0], device=self.device).type_as(
@@ -61,7 +119,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         return HybridState(time, continuous, discrete, mask)
 
     def loss_continuous(
-        self, heads: HybridState, state: HybridState, batch
+        self, heads: HybridState, state: HybridState, batch: DataBatch
     ) -> torch.Tensor:
         """mean square error loss for drift matching"""
         if hasattr(self, "bridge_continuous"):
@@ -78,7 +136,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             return torch.tensor(0.0, device=self.device)
 
     def loss_discrete(
-        self, heads: HybridState, state: HybridState, batch
+        self, heads: HybridState, state: HybridState, batch: DataBatch
     ) -> torch.Tensor:
         """cross-entropy loss for discrete state classifier"""
         if hasattr(self, "bridge_discrete"):
@@ -91,7 +149,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         else:
             return torch.tensor(0.0, device=self.device)
 
-    def simulate_dynamics(self, state: HybridState, batch) -> HybridState:
+    def simulate_dynamics(self, state: HybridState, batch: DataBatch) -> HybridState:
         """generate target data from source input using trained dynamics
         returns the final state of the bridge at the end of the time interval
         """
@@ -114,62 +172,6 @@ class MultiModalBridgeMatching(L.LightningModule):
             return t
         else:
             return t.reshape(-1, *([1] * (x.dim() - 1)))
-
-    ###########################
-    ### Lightning functions ###
-    ###########################
-
-    def training_step(self, batch, batch_idx) -> Dict[str, torch.Tensor]:
-        state = self.sample_bridges(batch)
-        state = state.to(self.device)
-        heads = self.forward(state, batch)
-        loss_0 = self.loss_continuous(heads, state, batch)
-        loss_1 = self.loss_discrete(heads, state, batch)
-        loss, loss_individual = self.loss_multimode([loss_0, loss_1])
-        weights = self.loss_multimode.get_weights()
-        return {
-            "loss": loss,
-            "train_loss_continuous": loss_individual[0],
-            "train_loss_discrete": loss_individual[1],
-            "weights_continuous": weights[0],
-            "weights_discrete": weights[1],
-        }
-
-    def validation_step(self, batch, batch_idx) -> Dict[str, torch.Tensor]:
-        state = self.sample_bridges(batch)
-        state = state.to(self.device)
-        heads = self.forward(state, batch)
-        loss_0 = self.loss_continuous(heads, state, batch)
-        loss_1 = self.loss_discrete(heads, state, batch)
-        loss, loss_individual = self.loss_multimode([loss_0, loss_1])
-        weights = self.loss_multimode.get_weights()
-        return {
-            "val_loss": loss,
-            "val_loss_continuous": loss_individual[0],
-            "val_loss_discrete": loss_individual[1],
-            "weights_continuous": weights[0],
-            "weights_discrete": weights[1],
-        }
-
-    def predict_step(
-        self, batch, batch_idx
-    ) -> Tuple[HybridState, HybridState, HybridState]:
-        source_state = HybridState(
-            None, batch.source.continuous, batch.source.discrete, batch.source.mask
-        )
-        target_state = HybridState(
-            None, batch.target.continuous, batch.target.discrete, batch.target.mask
-        )
-        initial_state = source_state.clone()
-        final_state = self.simulate_dynamics(initial_state, batch)
-        return final_state, source_state.detach().cpu(), target_state.detach().cpu()
-
-    def configure_optimizers(self):
-        conf = self.config.optimizer
-        optimizer = Optimizer[conf.name](self.parameters(), **conf.params.to_dict())
-        conf = self.config.scheduler
-        scheduler = Scheduler[conf.name](optimizer, **conf.params.to_dict())
-        return [optimizer], [scheduler]
 
 
 class MultiModeLoss(nn.Module):

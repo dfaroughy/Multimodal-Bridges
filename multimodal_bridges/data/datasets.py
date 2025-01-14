@@ -3,6 +3,8 @@ from collections import namedtuple
 from torch.utils.data import Dataset
 from data.states import HybridState
 
+DataBatch = namedtuple("DataBatch", ["source", "target", "context"])
+
 
 class HybridDataset(Dataset):
     def __init__(self, data):
@@ -59,8 +61,6 @@ class HybridDataset(Dataset):
         for idx in range(len(self)):
             yield self[idx]
 
-
-DataBatch = namedtuple("DataBatch", ["source", "target", "context"])
 
 
 def hybrid_collate_fn(batch):

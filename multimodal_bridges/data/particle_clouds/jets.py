@@ -7,106 +7,69 @@ import json
 import os
 import seaborn as sns
 import matplotlib.pyplot as plt
-from torch.utils.data import DataLoader, random_split, Subset
+from torch.utils.data import DataLoader, Subset
 import lightning.pytorch as L
 
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
 from utils.helpers import SimpleLogger as log
+from utils.helpers import get_from_json
 from data.particle_clouds.particles import ParticleClouds
 from data.datasets import HybridDataset, hybrid_collate_fn
 
 
 class JetDataModule(L.LightningDataModule):
-    """DataModule for handling source-target-context coupling for particle cloud data.
-    """
+    """DataModule for handling source-target-context coupling for particle cloud data."""
+
     def __init__(
         self,
         config,
-        preprocess=False,
+        preprocess=True,
         metadata_path=None,
     ):
         super().__init__()
         self.config = config
-        self.batch_size = config.datamodule.batch_size
-        self.num_workers = config.datamodule.num_workers
-        self.pin_memory = config.datamodule.pin_memory
-        self.split_ratios = config.datamodule.split_ratios
+        self.preprocess = preprocess
+        self.batch_size = config.data.batch_size
+        self.num_workers = config.data.num_workers
+        self.pin_memory = config.data.pin_memory
+        self.split_ratios = config.data.split_ratios
         self.metadata_path = metadata_path
-        self.metadata = {}
+        self._get_metadata()
 
-        # Metadata definitions
-        self.metadata["continuous_features"] = {'pt': 0, 'eta_rel': 1, 'phi_rel': 2}
-        self.metadata["discrete_features"] = {
-            "isPhoton": [1, 0, 0, 0, 0],
-            "isNeutralHadron": [0, 1, 0, 0, 0],
-            "isChargedHadron": [0, 0, 1, 0, 0],
-            "isElectron": [0, 0, 0, 1, 0],
-            "isMuon": [0, 0, 0, 0, 1],
-        }
-        self.metadata["electric_charges"] = [-1, 0, 1]
-        self.metadata["particles_info"] = {
-            0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
-            1: {"name": "neutral hadron", "color": "darkred", "marker": "o", "tex": r"$\rm h^0$"},
-            2: {"name": "negative hadron", "color": "darkred", "marker": "v", "tex": r"$\rm h^-$"},
-            3: {"name": "positive hadron", "color": "darkred", "marker": "^", "tex": r"$\rm h^+$"},
-            4: {"name": "electron", "color": "blue", "marker": "v", "tex": r"e^-"},
-            5: {"name": "positron", "color": "blue", "marker": "^", "tex": r"e^+"},
-            6: {"name": "muon", "color": "green", "marker": "v", "tex": r"\mu^-"},
-            7: {"name": "antimuon", "color": "green", "marker": "^", "tex": r"\mu^+"},
-        }
+    #####################
+    # Lightning methods #
+    #####################
 
-        self._prepare_datasets()
+    def setup(self, stage=None):
+        """Setup datasets for train, validation, and test splits."""
 
-        if preprocess:
-            self._preprocess_datasets()
-            self._store_metadata()
+        if stage == "fit" or stage is None:
+            log.info("Setting up datasets for training...")
+            self._prepare_fit_datasets(preprocess=self.preprocess)
+            dataset = HybridDataset(self)
+            idx0, idx1 = self._idx_data_split(dataset, self.split_ratios)
+            self.train_dataset = Subset(dataset, idx0) if idx0 else None
+            self.val_dataset = Subset(dataset, idx1) if idx1 else None
 
-    def _prepare_datasets(self):
-        """Prepare source and target datasets based on configuration."""
-        self.target = ParticleClouds(
-            dataset=self.config.data.target_name,
-            path=self.config.data.target_path,
-            num_jets=self.config.data.num_jets,
-            min_num_particles=self.config.data.min_num_particles,
-            max_num_particles=self.config.data.max_num_particles,
-        )
-        self.source = ParticleClouds(
-            dataset=self.config.data.source_name,
-            path=self.config.data.source_path,
-            num_jets=self.config.data.num_jets,
-            min_num_particles=self.config.data.min_num_particles,
-            max_num_particles=self.config.data.max_num_particles,
-            multiplicity_dist=self.target.multiplicity
-            if "Noise" in self.config.data.source_name
-            else None,
-        )
+        if stage == "predict":
+            log.info("Setting up datasets for generation...")
+            self._prepare_predict_datasets(preprocess=self.preprocess)
+            self.predict_dataset = HybridDataset(self)
 
-        self.metadata["source_data_stats"] = self.source.get_data_stats()
-        self.metadata["target_data_stats"] = self.target.get_data_stats()
+    def train_dataloader(self):
+        return self._get_dataloader(self.train_dataset, shuffle=True)
 
-    def _preprocess_datasets(self):
-        """Preprocess source and target datasets."""
-        log.info("Preprocessing datasets...")
-        self.source.preprocess(
-            continuous=self.config.data.source_preprocess_continuous,
-            discrete=self.config.data.source_preprocess_discrete,
-            **self.metadata["source_data_stats"],
-        )
-        self.target.preprocess(
-            continuous=self.config.data.target_preprocess_continuous,
-            discrete=self.config.data.target_preprocess_discrete,
-            **self.metadata["target_data_stats"],
-        )
+    def val_dataloader(self):
+        return self._get_dataloader(self.val_dataset, shuffle=False)
 
-    def _store_metadata(self):
-        if self.metadata_path:
-            log.info("Storing metadata at: {path}")
-            path = os.path.join(self.metadata_path, "metadata.json")
-            if not os.path.exists(path):
-                with open(path, "w") as f:
-                    json.dump(self.metadata, f, indent=4)
+    def predict_dataloader(self):
+        return self._get_dataloader(self.predict_dataset, shuffle=False)
+
+    #####################
+    # Data prep methods #
+    #####################
 
     def _get_dataloader(self, dataset, shuffle):
         return DataLoader(
@@ -118,48 +81,131 @@ class JetDataModule(L.LightningDataModule):
             collate_fn=hybrid_collate_fn,
         )
 
-    #####################
-    # Lightning methods #
-    #####################
-
-    def setup(self, stage=None):
-        """Setup datasets for train, validation, and test splits."""
-
-        dataset = HybridDataset(self)
-        assert np.abs(1.0 - sum(self.split_ratios)) < 1e-3, (
-            "Split fractions do not sum to 1!"
+    def _prepare_fit_datasets(self, preprocess=True):
+        """Prepare source and target datasets based on configuration."""
+        self.target = ParticleClouds(
+            dataset=self.config.data.target_name,
+            path=self.config.data.target_train_path,
+            num_jets=self.config.data.num_jets,
+            min_num_particles=self.config.data.min_num_particles,
+            max_num_particles=self.config.data.max_num_particles,
         )
+        self.source = ParticleClouds(
+            dataset=self.config.data.source_name,
+            path=self.config.data.source_train_path,
+            num_jets=self.config.data.num_jets,
+            min_num_particles=self.config.data.min_num_particles,
+            max_num_particles=self.config.data.max_num_particles,
+            multiplicity_dist=self.target.multiplicity
+            if "Noise" in self.config.data.source_name
+            else None,
+        )
+
+        self.metadata["source_data_stats"] = self.source.get_data_stats()
+        self.metadata["target_data_stats"] = self.target.get_data_stats()
+        self._store_metadata()
+
+        if preprocess:
+            log.info("Preprocessing source/target fit datasets...")
+            self.source.preprocess(
+                continuous=self.config.data.source_preprocess_continuous,
+                discrete=self.config.data.source_preprocess_discrete,
+                **self.metadata["source_data_stats"],
+            )
+            self.target.preprocess(
+                continuous=self.config.data.target_preprocess_continuous,
+                discrete=self.config.data.target_preprocess_discrete,
+                **self.metadata["target_data_stats"],
+            )
+
+    def _prepare_predict_datasets(self, preprocess=True):
+        """Prepare source and target datasets based on configuration."""
+        self.target = ParticleClouds(
+            dataset=self.config.data.target_name,
+            path=self.config.data.target_test_path,
+            num_jets=self.config.data.num_jets,
+            min_num_particles=self.config.data.min_num_particles,
+            max_num_particles=self.config.data.max_num_particles,
+        )
+        self.source = ParticleClouds(
+            dataset=self.config.data.source_name,
+            path=self.config.data.source_test_path,
+            num_jets=self.config.data.num_jets,
+            min_num_particles=self.config.data.min_num_particles,
+            max_num_particles=self.config.data.max_num_particles,
+            multiplicity_dist=self.target.multiplicity
+            if "Noise" in self.config.data.source_name
+            else None,
+        )
+
+        if preprocess:
+            self.metadata["source_data_stats"] = self.source.get_data_stats()
+            log.info("Preprocessing source predict datasets...")
+            self.source.preprocess(
+                continuous=self.config.data.source_preprocess_continuous,
+                discrete=self.config.data.source_preprocess_discrete,
+                **self.metadata["source_data_stats"],
+            )
+
+    def _store_metadata(self):
+        # only necesary for tests
+        if self.metadata_path:
+            log.info("Storing metadata at: {path}")
+            path = os.path.join(self.metadata_path, "metadata.json")
+            if not os.path.exists(path):
+                with open(path, "w") as f:
+                    json.dump(self.metadata, f, indent=4)
+
+    def _idx_data_split(self, dataset, ratios):
+        assert np.abs(1.0 - sum(ratios)) < 1e-3, "Split ratios not sum to 1!"
         total_size = len(dataset)
-        train_size = int(total_size * self.split_ratios[0])
-        valid_size = int(total_size * self.split_ratios[1])
-        test_size = int(total_size * self.split_ratios[2])
-
-        # ...define splitting indices
-
+        train_size = int(total_size * ratios[0])
+        valid_size = int(total_size * ratios[1])
         idx = torch.arange(total_size)
-        idx_train = idx[:train_size].tolist()
-        idx_valid = idx[train_size : train_size + valid_size].tolist()
-        idx_test = idx[train_size + valid_size :].tolist()
+        idx_train = idx[:train_size].tolist() if train_size > 0 else None
+        idx_valid = (
+            idx[train_size : train_size + valid_size].tolist()
+            if valid_size > 0
+            else None
+        )
+        return idx_train, idx_valid
 
-        # ...Create Subset for each split
-
-        self.train_dataset = Subset(dataset, idx_train) if train_size > 0 else None
-        self.val_dataset = Subset(dataset, idx_valid) if valid_size > 0 else None
-        self.test_dataset = Subset(dataset, idx_test) if test_size > 0 else None
-
-    def train_dataloader(self):
-        return self._get_dataloader(self.train_dataset, shuffle=True)
-
-    def val_dataloader(self):
-        return self._get_dataloader(self.val_dataset, shuffle=False)
-
-    def test_dataloader(self):
-        return self._get_dataloader(self.test_dataset, shuffle=False)
-
-    # def predict_dataloader(self):
-    #     """Dataloader for inference/prediction."""
-    #     dataset = HybridDataset(self)
-    #     return self._get_dataloader(dataset, shuffle=False)
+    def _get_metadata(self):
+            self.metadata = {}
+            self.metadata["continuous_features"] = {"pt": 0, "eta_rel": 1, "phi_rel": 2}
+            self.metadata["discrete_features"] = {
+                "isPhoton": [1, 0, 0, 0, 0],
+                "isNeutralHadron": [0, 1, 0, 0, 0],
+                "isChargedHadron": [0, 0, 1, 0, 0],
+                "isElectron": [0, 0, 0, 1, 0],
+                "isMuon": [0, 0, 0, 0, 1],
+            }
+            self.metadata["electric_charges"] = [-1, 0, 1]
+            self.metadata["particles_info"] = {
+                0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
+                1: {
+                    "name": "neutral hadron",
+                    "color": "darkred",
+                    "marker": "o",
+                    "tex": r"$\rm h^0$",
+                },
+                2: {
+                    "name": "negative hadron",
+                    "color": "darkred",
+                    "marker": "v",
+                    "tex": r"$\rm h^-$",
+                },
+                3: {
+                    "name": "positive hadron",
+                    "color": "darkred",
+                    "marker": "^",
+                    "tex": r"$\rm h^+$",
+                },
+                4: {"name": "electron", "color": "blue", "marker": "v", "tex": r"e^-"},
+                5: {"name": "positron", "color": "blue", "marker": "^", "tex": r"e^+"},
+                6: {"name": "muon", "color": "green", "marker": "v", "tex": r"\mu^-"},
+                7: {"name": "antimuon", "color": "green", "marker": "^", "tex": r"\mu^+"},
+            }
 
 
 class JetClassHighLevelFeatures:
@@ -216,7 +262,8 @@ class JetClassHighLevelFeatures:
 
     def jet_charge(self, kappa):
         """jet charge defined as Q_j^kappa = Sum_i Q_i * (pT_i / pT_jet)^kappa"""
-        Qjet = self.constituents.charge.squeeze(-1) * (self.constituents.pt) ** kappa
+        charge = self.constituents.discrete[..., -1].squeeze(-1)
+        Qjet = charge * (self.constituents.pt) ** kappa
         return Qjet.sum(axis=1) / (self.pt**kappa)
 
     def histplot_multiplicities(
@@ -411,7 +458,6 @@ class JetClassHighLevelFeatures:
         return scipy.stats.wasserstein_distance(x, y)
 
 
-
 # class JetDataModule:
 #     """class that prepares the source-target coupling"""
 
@@ -498,4 +544,3 @@ class JetClassHighLevelFeatures:
 #             if not os.path.exists(self.metadata_path):
 #                 with open(self.metadata_path, "w") as f:
 #                     json.dump(self.metadata, f, indent=4)
-
