@@ -2,9 +2,10 @@ import os
 import pytest
 import shutil
 import h5py
-from utils.experiment_pipeline import ExperimentPipeline
+
+from pipeline.helpers import SimpleLogger as log
+from pipeline.experiment import ExperimentPipeline
 from data.particle_clouds.jets import JetDataModule
-from utils.helpers import SimpleLogger as log
 
 log.warnings_off()
 
@@ -14,7 +15,7 @@ def modality():
 
 @pytest.fixture
 def devices():
-    return [0,3]
+    return 1
 
 def test_experiment_multimodal(modality, devices):
    

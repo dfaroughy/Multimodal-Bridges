@@ -2,7 +2,7 @@ import yaml
 import os
 from dataclasses import dataclass, field, asdict
 from typing import Optional, Dict, List, Union
-from utils.helpers import SimpleLogger as log
+from pipeline.helpers import SimpleLogger as log
 
 @dataclass
 class CometLoggerConfig:

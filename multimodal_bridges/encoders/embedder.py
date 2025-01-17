@@ -4,7 +4,7 @@ from torch import nn
 from typing import Tuple
 
 from data.datasets import MultiModeState
-from utils.helpers import SimpleLogger as log
+from pipeline.helpers import SimpleLogger as log
 
 
 class EmbedMode(nn.Module):

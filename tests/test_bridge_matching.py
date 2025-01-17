@@ -1,10 +1,10 @@
 import os
 import pytest
 import torch
-from utils.configs import ExperimentConfigs
+from pipeline.helpers import SimpleLogger as log
+from pipeline.configs import ExperimentConfigs
 from data.dataclasses import MultiModeState, DataCoupling
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
-from utils.helpers import SimpleLogger as log
 
 log.warnings_off()
 

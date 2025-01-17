@@ -3,11 +3,9 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from utils.helpers import get_from_json
-from utils.helpers import SimpleLogger as log
-log.warnings_off()
-
-from utils.configs import ExperimentConfigs
+from pipeline.helpers import get_from_json
+from pipeline.helpers import SimpleLogger as log
+from pipeline.configs import ExperimentConfigs
 from data.dataclasses import MultiModeState, DataCoupling
 from data.particle_clouds.jets import JetDataModule
 from data.particle_clouds.utils import (
@@ -16,6 +14,8 @@ from data.particle_clouds.utils import (
     map_tokens_to_basis,
     map_onehot_to_basis,
 )
+
+log.warnings_off()
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output"

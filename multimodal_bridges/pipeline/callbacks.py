@@ -9,9 +9,9 @@ from lightning import LightningModule, Trainer
 from lightning.pytorch.callbacks import Callback, ModelCheckpoint
 from lightning.pytorch.utilities import rank_zero_only
 
-from utils.configs import ExperimentConfigs
-from utils.helpers import get_from_json
-from utils.helpers import SimpleLogger as log
+from pipeline.configs import ExperimentConfigs
+from pipeline.helpers import get_from_json
+from pipeline.helpers import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
 from data.particle_clouds.jets import JetClassHighLevelFeatures
 from model.multimodal_bridge_matching import MultiModeState

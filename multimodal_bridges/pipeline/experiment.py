@@ -7,10 +7,10 @@ from lightning.pytorch.callbacks import RichProgressBar
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 from lightning.pytorch.utilities import rank_zero_only
 
-from utils.configs import ExperimentConfigs, progress_bar
-from utils.helpers import SimpleLogger as log
+from pipeline.configs import ExperimentConfigs, progress_bar
+from pipeline.helpers import SimpleLogger as log
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
-from utils.callbacks import (
+from pipeline.callbacks import (
     ModelCheckpointCallback,
     ExperimentLoggerCallback,
     JetsGenerativeCallback,

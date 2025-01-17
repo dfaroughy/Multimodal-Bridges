@@ -3,11 +3,11 @@ import torch.nn as nn
 import lightning as L
 from typing import List, Tuple, Dict, Union
 
-from utils.configs import ExperimentConfigs
-from utils.registry import registered_models as Encoder
-from utils.registry import registered_bridges as Bridge
-from utils.registry import registered_optimizers as Optimizer
-from utils.registry import registered_schedulers as Scheduler
+from pipeline.configs import ExperimentConfigs
+from pipeline.registry import registered_models as Encoder
+from pipeline.registry import registered_bridges as Bridge
+from pipeline.registry import registered_optimizers as Optimizer
+from pipeline.registry import registered_schedulers as Scheduler
 
 from data.dataclasses import MultiModeState, DataCoupling
 from encoders.embedder import MultiModalParticleCloudEmbedder

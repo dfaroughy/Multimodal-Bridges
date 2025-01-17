@@ -42,11 +42,11 @@ encoder:
   data_augmentation: false
   dim_emb_context_continuous: 0
   dim_emb_context_discrete: 0
-  dim_emb_continuous: 16
-  dim_emb_discrete: 16
-  dim_emb_time: 16
-  dim_hidden_glob: 16
-  dim_hidden_local: 16
+  dim_emb_continuous: 4
+  dim_emb_discrete: 4
+  dim_emb_time: 4
+  dim_hidden_glob: 4
+  dim_hidden_local: 4
   dropout: 0.0
   embed_type_context_continuous: null
   embed_type_context_discrete: null
@@ -54,20 +54,20 @@ encoder:
   embed_type_discrete: LookupTable
   embed_type_time: SinusoidalPositionalEncoding
   name: MultiModalEPiC
-  num_blocks: 2
+  num_blocks: 1
   skip_connection: true
 model:
   bridge_continuous: LinearUniformBridge
   bridge_discrete: TelegraphBridge
   gamma: 0.125
   loss_weights: learnable
-  num_timesteps: 200
+  num_timesteps: 10
   sigma: 0.0001
   time_eps: 0.0001
-path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/25682ae52c67402ca590444faf4db155
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/a1b97e755a7c4ef3bc14f980f65bb542
 trainer:
   gradient_clip_val: 1.0
-  max_epochs: 10
+  max_epochs: 2
   optimizer_name: AdamW
   optimizer_params:
     amsgrad: false

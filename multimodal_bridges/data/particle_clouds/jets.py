@@ -13,7 +13,7 @@ import lightning.pytorch as L
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
-from utils.helpers import SimpleLogger as log
+from pipeline.helpers import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
 from data.datasets import MultiModalCouplingDataset, data_coupling_collate_fn
 
