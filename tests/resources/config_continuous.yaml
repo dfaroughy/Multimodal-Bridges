@@ -1,5 +1,5 @@
 trainer:
-  max_epochs: 10
+  max_epochs: 2
   gradient_clip_val: 1.0
   optimizer_name: AdamW
   optimizer_params:
@@ -15,7 +15,7 @@ trainer:
     last_epoch: -1
 
 data:
-  modality: multi-modal
+  modality: continuous
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
   target_name: AspenOpenJets
@@ -23,56 +23,40 @@ data:
   target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
   target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
   target_preprocess_continuous: standardize
-  target_preprocess_discrete: tokenize
-  source_preprocess_discrete: tokenize
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
-  dim_continuous: 3             
-  dim_discrete: 1               
-  dim_context_continuous: 5
-  dim_context_discrete: 4      
-  vocab_size: 8 
-  vocab_size_context: 7  
+  dim_continuous: 3       
 
 model:
   bridge_continuous: LinearUniformBridge
-  bridge_discrete: TelegraphBridge
-  loss_weights: 'learnable'
   sigma: 0.0001
-  gamma: 0.125
-  num_timesteps: 200
+  num_timesteps: 10
   time_eps: 0.0001
 
 encoder:
   name: MultiModalEPiC
-  num_blocks: 2
-  dim_hidden_local: 128
-  dim_hidden_glob: 32
+  num_blocks: 1
+  dim_hidden_local: 4
+  dim_hidden_glob: 4
   skip_connection: true
-  dropout: 0.2
+  dropout: 0.0
   data_augmentation: false
   embed_type_time: SinusoidalPositionalEncoding
-  embed_type_continuous: MLP
-  embed_type_discrete: LookupTableMLP
-  embed_type_context_continuous: MLP
-  embed_type_context_discrete: LookupTableMLP
-  dim_emb_time: 32
-  dim_emb_continuous: 16
-  dim_emb_discrete: 12
-  dim_emb_context_continuous: 5
-  dim_emb_context_discrete: 2
+  embed_type_continuous: Linear
+  dim_emb_time: 4
+  dim_emb_continuous: 4
 
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
   project_name: multimodal-jets
   workspace: dfaroughy
-  save_dir: /home/df630/Multimodal-Bridges/experiments/results/comet
+  save_dir: /home/df630/Multimodal-Bridges/tests/output
     
 checkpoints:
   dirpath: null 
   monitor: val_loss      
   mode: min            
   save_top_k: 1
-  filename: best-{epoch:02d}-{val_loss:.4f}
+  filename: best
   save_last: true

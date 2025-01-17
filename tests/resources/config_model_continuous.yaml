@@ -15,7 +15,7 @@ trainer:
     last_epoch: -1
 
 data:
-  modality: multi-modal
+  modality: continuous
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
   target_name: AspenOpenJets
@@ -23,22 +23,16 @@ data:
   target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
   target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
   target_preprocess_continuous: standardize
-  target_preprocess_discrete: tokenize
-  source_preprocess_discrete: tokenize
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
   dim_continuous: 3             
-  dim_discrete: 1               
   dim_context_continuous: 5
   dim_context_discrete: 4      
-  vocab_size: 8 
   vocab_size_context: 7  
 
 model:
   bridge_continuous: LinearUniformBridge
-  bridge_discrete: TelegraphBridge
-  loss_weights: 'learnable'
   sigma: 0.0001
   gamma: 0.125
   num_timesteps: 200
@@ -46,20 +40,18 @@ model:
 
 encoder:
   name: MultiModalEPiC
-  num_blocks: 2
+  num_blocks: 12
   dim_hidden_local: 128
   dim_hidden_glob: 32
   skip_connection: true
-  dropout: 0.2
+  dropout: 0.2  
   data_augmentation: false
   embed_type_time: SinusoidalPositionalEncoding
   embed_type_continuous: MLP
-  embed_type_discrete: LookupTableMLP
   embed_type_context_continuous: MLP
   embed_type_context_discrete: LookupTableMLP
   dim_emb_time: 32
   dim_emb_continuous: 16
-  dim_emb_discrete: 12
   dim_emb_context_continuous: 5
   dim_emb_context_discrete: 2
 

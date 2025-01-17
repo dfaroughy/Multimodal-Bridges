@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
-from data.datasets import HybridState
+from data.datasets import MultiModeState
 
 
 class MultiModalEPiC(nn.Module):
@@ -13,17 +13,16 @@ class MultiModalEPiC(nn.Module):
         super().__init__()
 
         self.config = config
+        aug_factor = 2 if config.encoder.data_augmentation else 1
 
         dim_input = (
             config.encoder.dim_emb_time
             + config.encoder.dim_emb_continuous
-            + config.encoder.dim_emb_discrete * config.data.dim_discrete
-            + config.encoder.dim_emb_augment_continuous
-            + config.encoder.dim_emb_augment_discrete * config.data.dim_discrete
+            + config.encoder.dim_emb_discrete * config.data.dim_discrete * aug_factor
         )
         dim_output = (
             config.data.dim_continuous
-            + config.data.dim_discrete * config.data.vocab_size
+            + config.data.vocab_size * config.data.dim_discrete 
         )
         dim_context = (
             config.encoder.dim_emb_time
@@ -42,20 +41,20 @@ class MultiModalEPiC(nn.Module):
         )
 
     def forward(
-        self, state_local: HybridState, state_global: HybridState
-    ) -> HybridState:
+        self, state_local: MultiModeState, state_global: MultiModeState
+    ) -> MultiModeState:
 
-        local_modes = [getattr(state_local, mode) for mode in state_local.modes()]
-        global_modes = [getattr(state_global, mode) for mode in state_global.modes()]
+        local_modes = [getattr(state_local, mode) for mode in state_local.available_modes()]
+        global_modes = [getattr(state_global, mode) for mode in state_global.available_modes()]
         local_cat = torch.cat(local_modes, dim=-1)
         global_cat = torch.cat(global_modes, dim=-1)
 
         mask = state_local.mask
 
         h = self.epic(local_cat, global_cat, mask)
-        head_continuous = h[..., : self.config.data.dim_continuous]
-        head_discrete = h[..., self.config.data.dim_continuous :]
-        return HybridState(None, head_continuous, head_discrete, mask)
+        head_continuous = h[..., : self.config.data.dim_continuous] if 'continuous' in state_local.available_modes() else None
+        head_discrete = h[..., self.config.data.dim_continuous :] if 'discrete' in state_local.available_modes() else None
+        return MultiModeState(None, head_continuous, head_discrete, mask)
 
 
 class EPiCNetwork(nn.Module):

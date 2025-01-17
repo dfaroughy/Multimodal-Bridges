@@ -1,12 +1,11 @@
 import torch
 from collections import namedtuple
 from torch.utils.data import Dataset
-from data.states import HybridState
 
-DataBatch = namedtuple("DataBatch", ["source", "target", "context"])
+from data.dataclasses import MultiModeState, DataCoupling
 
 
-class HybridDataset(Dataset):
+class MultiModalCouplingDataset(Dataset):
     def __init__(self, data):
         self.data = data
         self.attribute = []
@@ -62,12 +61,11 @@ class HybridDataset(Dataset):
             yield self[idx]
 
 
-
-def hybrid_collate_fn(batch):
-    """Custom collate function for HybridState."""
-    source = HybridState()
-    target = HybridState()
-    context = HybridState()
+def data_coupling_collate_fn(batch: namedtuple) -> DataCoupling:
+    """Custom collate function for data coupling with hybrid states."""
+    source = MultiModeState()
+    target = MultiModeState()
+    context = MultiModeState()
 
     source.continuous = (
         torch.stack([data.source_continuous for data in batch])
@@ -110,4 +108,4 @@ def hybrid_collate_fn(batch):
         else None
     )
 
-    return DataBatch(source=source, target=target, context=context)
+    return DataCoupling(source, target, context)

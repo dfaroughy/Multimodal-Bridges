@@ -1,96 +1,105 @@
+trainer:
+  max_epochs: 100
+  gradient_clip_val: 1.0
+  optimizer_name: AdamW
+  scheduler_name: CosineAnnealingLR
+  optimizer_params:
+    lr: 0.0002
+    weight_decay: 5.0e-5
+    betas: [0.9, 0.999]
+    eps: 1.e-8
+    amsgrad: false
+  scheduler_params:
+    T_max: 100
+    eta_min: 1.0e-5
+    last_epoch: -1
+
+data:
+  modality: continuous
+  batch_size: 1024
+  split_ratios: [0.7, 0.3]  # train / val / test
+  num_workers: 0
+  pin_memory: false
+
+  target_name: AspenOpenJets
+  source_name: GaussNoise
+  target_train_path: 
+      - /home/df630/CMB/data/AOJ/2016H_job0.h5
+      - /home/df630/CMB/data/AOJ/2016H_job1.h5
+      - /home/df630/CMB/data/AOJ/2016H_job2.h5
+      - /home/df630/CMB/data/AOJ/2016H_job3.h5 
+      - /home/df630/CMB/data/AOJ/2016H_job4.h5
+      - /home/df630/CMB/data/AOJ/2016H_job5.h5
+      - /home/df630/CMB/data/AOJ/2016H_job6.h5
+      - /home/df630/CMB/data/AOJ/2016H_job7.h5
+  target_test_path: 
+      - /home/df630/CMB/data/AOJ/2016H_job8.h5
+      - /home/df630/CMB/data/AOJ/2016H_job9.h5
+  target_preprocess_continuous: standardize
+  target_preprocess_discrete: tokenize
+  source_preprocess_discrete: tokenize
+  min_num_particles: 0
+  max_num_particles: 128
+  num_jets: 100_000
+  dim_continuous: 3             # pt, eta_rel, phi_phi
+
+model:
+  bridge_continuous: LinearUniformBridge
+  bridge_discrete: TelegraphBridge
+  loss_weights: 'learnable'
+  sigma: 0.0001
+  gamma: 0.125
+  num_timesteps: 200
+  time_eps: 0.0001
+
+encoder:
+  name: MultiModalEPiC
+  num_blocks: 12
+  dim_hidden_local: 128
+  dim_hidden_glob: 32
+  skip_connection: true
+  dropout: 0.2
+  activation: ReLU
+  embed_type_time: SinusoidalPositionalEncoding
+  embed_type_continuous: Linear
+  dim_emb_time: 32
+  dim_emb_continuous: 16
+
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
   project_name: multimodal-jets
   workspace: dfaroughy
-  save_dir: /home/df630/Multimodal-Bridges/tests/resources/output
+  save_dir: /home/df630/Multimodal-Bridges/experiments/results/comet
     
 checkpoints:
   dirpath: null 
   monitor: val_loss      
   mode: min            
-  save_top_k: 3
+  save_top_k: 10
   filename: best-{epoch:02d}-{val_loss:.4f}
   save_last: true
 
-lightning_trainer:
-  max_epochs: 3
-  gradient_clip_val: 1.0
-  optimizer_name: AdamW
 
-optimizer:
-  name: AdamW
-  lr: 0.001
-  weight_decay: 5.0e-5
-  betas: [0.9, 0.999]
-  eps: 1.e-8
-  amsgrad: false
 
-scheduler:
-  name: CosineAnnealingLR
-  T_max: 1000
-  eta_min: 5.0e-5
-  last_epoch: -1
+# encoder:
+#   name: MultiModalParticleTransformer
+#   num_heads: 4
+#   dim_hidden_continuous: 32
+#   dim_hidden_discrete: 32
+#   dropout: 0.2
+#   embed_type_time: SinusoidalPositionalEncoding
+#   embed_type_continuous: Linear
+#   embed_type_discrete: LookupTable
+#   embed_type_augment_continuous: null
+#   embed_type_augment_discrete: null
+#   embed_type_context_continuous: null
+#   embed_type_context_discrete: null
+#   dim_emb_time: 16
+#   dim_emb_continuous: 16
+#   dim_emb_discrete: 16
+#   dim_emb_augment_continuous: 0
+#   dim_emb_augment_discrete: 0
+#   dim_emb_context_continuous: 0
+#   dim_emb_context_discrete: 0
+#   activation: ReLU
 
-datamodule:
-  batch_size: 100
-  split_ratios: [0.8, 0.2, 0.0]  # train / val / test
-  num_workers: 4
-
-data:
-  target_name: AspenOpenJets
-  target_path: 
-      - /home/df630/CMB/data/AOJ/2016H_job0.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job1.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job2.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job3.h5 
-      # - /home/df630/CMB/data/AOJ/2016H_job4.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job5.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job6.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job7.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job8.h5
-      # - /home/df630/CMB/data/AOJ/2016H_job9.h5
-  target_preprocess_continuous: standardize
-  target_preprocess_discrete: tokenize
-  source_name: GaussNoise
-  source_path: null
-  source_preprocess_continuous: null
-  source_preprocess_discrete: tokenize
-  source_masks_from_target_masks: true # if True, source mask is sampled from multinomial dist from number of target particles
-  fill_target_with_noise: false
-  min_num_particles: 0
-  max_num_particles: 128
-  num_jets: 1000
-  dim_continuous: 3             # pt, eta_rel, phi_phi
-  dim_discrete: 1               # flavor x charge
-  dim_context_continuous: 0
-  dim_context_discrete: 0      
-  vocab_size: 8 
-  vocab_size_context: 0  
-
-bridge:
-  continuous: LinearUniformBridge
-  discrete: TelegraphBridge
-  sigma: 0.0001
-  gamma: 0.125
-  num_timesteps: 100
-  time_eps: 0.0001
-
-encoder:
-  name: MultiModalEPiC
-  num_blocks: 2
-  embedding_time: SinusoidalPositionalEncoding
-  embedding_features_continuous: Linear
-  embedding_features_discrete: Embedding
-  embedding_context_continuous: null
-  embedding_context_discrete: null
-  dim_hidden_local: 16
-  dim_hidden_glob: 16
-  dim_emb_time: 16
-  dim_emb_features_continuous: 16
-  dim_emb_features_discrete: 16
-  dim_emb_context_continuous: 0
-  dim_emb_context_discrete: 0
-  skip_connection: true
-  dropout: 0.1
-  activation: SELU
-  add_discrete_head: true

@@ -14,7 +14,7 @@ from utils.helpers import get_from_json
 from utils.helpers import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
 from data.particle_clouds.jets import JetClassHighLevelFeatures
-from model.multimodal_bridge_matching import HybridState
+from model.multimodal_bridge_matching import MultiModeState
 
 
 class ModelCheckpointCallback(ModelCheckpoint):
@@ -29,8 +29,7 @@ class ModelCheckpointCallback(ModelCheckpoint):
         Args:
             config (ExperimentConfigs): The configuration object containing checkpoint settings.
         """
-        checkpoint_config = config.checkpoints.to_dict()
-        super().__init__(**checkpoint_config)
+        super().__init__(**config.checkpoints.__dict__)
 
 
 class ExperimentLoggerCallback(Callback):
@@ -130,6 +129,7 @@ class JetsGenerativeCallback(Callback):
         self.batched_target_states = []
 
     def on_predict_start(self, trainer, pl_module):
+        print(self.config.path)
         self.data_dir = os.path.join(self.config.path, "data")
         self.metric_dir = os.path.join(self.config.path, "metrics")
         os.makedirs(self.data_dir, exist_ok=True)
@@ -143,7 +143,7 @@ class JetsGenerativeCallback(Callback):
 
     def on_predict_end(self, trainer, pl_module):
         # ...generated sample
-        gen_sample = HybridState.cat(self.batched_gen_states)
+        gen_sample = MultiModeState.cat(self.batched_gen_states)
         self.gen_sample = ParticleClouds(dataset=gen_sample)
         prep_continuous = self.config.data.target_preprocess_continuous
         prep_discrete = self.config.data.target_preprocess_discrete
@@ -152,7 +152,7 @@ class JetsGenerativeCallback(Callback):
         gen_jets = JetClassHighLevelFeatures(constituents=self.gen_sample)
 
         # ...test sample
-        test_sample = HybridState.cat(self.batched_target_states)
+        test_sample = MultiModeState.cat(self.batched_target_states)
         self.test_sample = ParticleClouds(dataset=test_sample)
         test_jets = JetClassHighLevelFeatures(constituents=self.test_sample)
 
@@ -160,7 +160,7 @@ class JetsGenerativeCallback(Callback):
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
         self.gen_sample.save_to(path=os.path.join(self.data_dir, "generated_sample.h5"))
         self.test_sample.save_to(path=os.path.join(self.data_dir, "test_sample.h5"))
-        with open(os.path.join(self.metric_dir, "performance_metrics.h5"), "w") as f:
+        with open(os.path.join(self.metric_dir, "performance_metrics.json"), "w") as f:
             json.dump(metrics, f, indent=4)
 
         if hasattr(self.config, "comet_logger"):
@@ -246,74 +246,72 @@ class JetsGenerativeCallback(Callback):
                 xlabel=r"$\tau_{32}$",
             ),
         }
-        discrete_plots = {
-            "total charge": self.plot_feature(
-                "Q_total",
-                gen_jets,
-                test_jets,
-                xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
-                discrete=True,
-            ),
-            "jet charge": self.plot_feature(
-                "Q_jet",
-                gen_jets,
-                test_jets,
-                xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
-            ),
-            "photon multiplicity": self.plot_multiplicity(
-                0,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_\gamma$",
-            ),
-            "neutral hadron multiplicity": self.plot_multiplicity(
-                1,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{\rm h^0}$",
-            ),
-            "negative hadron multiplicity": self.plot_multiplicity(
-                2,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{\rm h^-}$",
-            ),
-            "positive hadron multiplicity": self.plot_multiplicity(
-                2,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{\rm h^+}$",
-            ),
-            "electron multiplicity": self.plot_multiplicity(
-                4,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{e^-}$",
-            ),
-            "positron multiplicity": self.plot_multiplicity(
-                5,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{e^+}$",
-            ),
-            "muon multiplicity": self.plot_multiplicity(
-                6,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{\mu^-}$",
-            ),
-            "antimuon multiplicity": self.plot_multiplicity(
-                7,
-                gen_jets,
-                test_jets,
-                xlabel=r"$N_{\mu^+}$",
-            ),
-        }
-        return (
-            {**continuous_plots, **discrete_plots}
-            if hasattr(test_jets.constituents, "discrete")
-            else continuous_plots
-        )
+        if hasattr(gen_jets.constituents, "discrete"):
+            discrete_plots = {
+                "total charge": self.plot_feature(
+                    "Q_total",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
+                    discrete=True,
+                ),
+                "jet charge": self.plot_feature(
+                    "Q_jet",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
+                ),
+                "photon multiplicity": self.plot_multiplicity(
+                    0,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_\gamma$",
+                ),
+                "neutral hadron multiplicity": self.plot_multiplicity(
+                    1,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{\rm h^0}$",
+                ),
+                "negative hadron multiplicity": self.plot_multiplicity(
+                    2,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{\rm h^-}$",
+                ),
+                "positive hadron multiplicity": self.plot_multiplicity(
+                    2,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{\rm h^+}$",
+                ),
+                "electron multiplicity": self.plot_multiplicity(
+                    4,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{e^-}$",
+                ),
+                "positron multiplicity": self.plot_multiplicity(
+                    5,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{e^+}$",
+                ),
+                "muon multiplicity": self.plot_multiplicity(
+                    6,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{\mu^-}$",
+                ),
+                "antimuon multiplicity": self.plot_multiplicity(
+                    7,
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$N_{\mu^+}$",
+                ),
+            }
+            return {**continuous_plots, **discrete_plots}
+        return continuous_plots
 
     def plot_feature(self, feat, gen, test, xlabel=None, log=False, discrete=False):
         fig, ax = plt.subplots(1, 1, figsize=(4, 4))

@@ -1,19 +1,18 @@
 import torch
 import torch.nn as nn
 
-from data.datasets import HybridState
+from data.datasets import MultiModeState
 
 
 class MultiModalParticleTransformer(nn.Module):
     def __init__(self, config):
         super().__init__()
+        aug_factor = 2 if config.encoder.data_augmentation else 1
+        
         dim_time = config.encoder.dim_emb_time
-        dim_input_continuous = (
-            config.encoder.dim_emb_continuous
-            + config.encoder.dim_emb_augment_continuous
-        )
+        dim_input_continuous = config.encoder.dim_emb_continuous
         dim_input_discrete = config.data.dim_discrete * (
-            config.encoder.dim_emb_discrete + config.encoder.dim_emb_augment_discrete
+            config.encoder.dim_emb_discrete * aug_factor
         )
         dim_hidden_continuous = config.encoder.dim_hidden_continuous
         dim_hidden_discrete = config.encoder.dim_hidden_discrete
@@ -123,8 +122,8 @@ class MultiModalParticleTransformer(nn.Module):
         )
 
     def forward(
-        self, state_local: HybridState, state_global: HybridState
-    ) -> HybridState:
+        self, state_local: MultiModeState, state_global: MultiModeState
+    ) -> MultiModeState:
         time = state_local.time
         continuous = state_local.continuous
         discrete = state_local.discrete
@@ -150,7 +149,7 @@ class MultiModalParticleTransformer(nn.Module):
         head_continuous = self.cross_attn_continuous_1(h, f, time, mask)
         head_discrete = self.cross_attn_discrete_1(f, h, time, mask)
 
-        return HybridState(
+        return MultiModeState(
             continuous=head_continuous, discrete=head_discrete, mask=mask
         )
 

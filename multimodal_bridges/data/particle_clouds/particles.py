@@ -7,7 +7,7 @@ import h5py
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
-from data.states import HybridState
+from data.dataclasses import MultiModeState
 from data.particle_clouds.utils import (
     extract_jetclass_features,
     extract_aoj_features,
@@ -39,12 +39,12 @@ class ParticleClouds:
             if not self.discrete.nelement():
                 del self.discrete
 
-        elif isinstance(dataset, HybridState):
-            self.continuous = dataset.continuous
-            self.discrete = dataset.discrete
+        elif isinstance(dataset, MultiModeState):
+            if "continuous" in dataset.available_modes():
+                self.continuous = dataset.continuous
+            if "discrete" in dataset.available_modes():
+                self.discrete = dataset.discrete
             self.mask = dataset.mask
-            if not self.discrete.nelement():
-                del self.discrete
 
         elif "JetClass" in dataset:
             assert path is not None, "Specify the path to the JetClass dataset"
@@ -114,12 +114,10 @@ class ParticleClouds:
 
     def save_to(self, path):
         with h5py.File(path, "w") as f:
-            if self.continuous is not None:
-                f.create_dataset("continuous", data=self.continuous)
-            if self.discrete is not None:
+            f.create_dataset("continuous", data=self.continuous)
+            if hasattr(self, "discrete"):
                 f.create_dataset("discrete", data=self.discrete)
-            if self.mask is not None:
-                f.create_dataset("mask", data=self.mask)
+            f.create_dataset("mask", data=self.mask)
 
     #############################
     # ...data processing methods

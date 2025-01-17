@@ -8,6 +8,7 @@ from utils.helpers import SimpleLogger as log
 log.warnings_off()
 
 from utils.configs import ExperimentConfigs
+from data.dataclasses import MultiModeState, DataCoupling
 from data.particle_clouds.jets import JetDataModule
 from data.particle_clouds.utils import (
     map_basis_to_tokens,
@@ -18,12 +19,28 @@ from data.particle_clouds.utils import (
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_data.yaml")
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config.yaml")
 
 
 def test_configs():
     config = ExperimentConfigs(CONFIG_PATH)
     assert config is not None
+
+
+def test_data_shapes():
+    config = ExperimentConfigs(CONFIG_PATH)
+    jets = JetDataModule(config=config)
+    jets.setup()
+    N = config.data.num_jets
+    M = config.data.max_num_particles
+    D0 = config.data.dim_continuous
+    D1 = config.data.dim_discrete
+    assert jets.source.continuous.shape == torch.Size([N, M, D0])
+    assert jets.source.discrete.shape == torch.Size([N, M, D1])
+    assert jets.source.mask.shape == torch.Size([N, M, 1])
+    assert jets.target.continuous.shape == torch.Size([N, M, D0])
+    assert jets.target.discrete.shape == torch.Size([N, M, D1])
+    assert jets.target.mask.shape == torch.Size([N, M, 1])
 
 
 def test_databatch():
@@ -41,11 +58,19 @@ def test_databatch():
     )
 
     for batch in train_dataloader:
+        
+        assert isinstance(batch.source, MultiModeState) 
+        assert batch.source.ndim == 3
+        
+        assert isinstance(batch.target, MultiModeState) 
+        assert batch.target.ndim == 3
+
         assert batch.source.continuous.shape[0] == config.data.batch_size
         assert batch.source.continuous.shape[1] == config.data.max_num_particles
         assert batch.source.continuous.shape[2] == config.data.dim_continuous
         assert batch.source.discrete.shape[2] == config.data.dim_discrete
         assert batch.source.mask.shape[2] == 1
+
         assert batch.target.continuous.shape[0] == config.data.batch_size
         assert batch.target.continuous.shape[1] == config.data.max_num_particles
         assert batch.target.continuous.shape[2] == config.data.dim_continuous
@@ -72,22 +97,6 @@ def test_databatch():
         assert batch.target.continuous.shape[2] == config.data.dim_continuous
         assert batch.target.discrete.shape[2] == 6
         assert batch.target.mask.shape[2] == 1
-
-
-def test_data_shapes():
-    config = ExperimentConfigs(CONFIG_PATH)
-    jets = JetDataModule(config=config)
-    jets.setup()
-    N = config.data.num_jets
-    M = config.data.max_num_particles
-    D0 = config.data.dim_continuous
-    D1 = config.data.dim_discrete
-    assert jets.source.continuous.shape == torch.Size([N, M, D0])
-    assert jets.source.discrete.shape == torch.Size([N, M, D1])
-    assert jets.source.mask.shape == torch.Size([N, M, 1])
-    assert jets.target.continuous.shape == torch.Size([N, M, D0])
-    assert jets.target.discrete.shape == torch.Size([N, M, D1])
-    assert jets.target.mask.shape == torch.Size([N, M, 1])
 
 
 def test_data_discrete_bases():

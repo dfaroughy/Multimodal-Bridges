@@ -3,6 +3,8 @@ from torch.nn.functional import softmax
 from torch.distributions import Categorical
 from dataclasses import dataclass
 
+from data.dataclasses import MultiModeState, DataCoupling
+
 
 class LinearUniformBridge:
     """Conditional OT Flow-Matching for continuous states.
@@ -18,19 +20,24 @@ class LinearUniformBridge:
     def __init__(self, config: dataclass):
         self.sigma = config.model.sigma
 
-    def sample(self, t, x0, x1):
-        x = t * x1 + (1.0 - t) * x0
-        z = torch.randn_like(x)
+    def sample(self, t, batch: DataCoupling):
+        x0 = batch.source.continuous
+        x1 = batch.target.continuous
+        xt = t * x1 + (1.0 - t) * x0
+        z = torch.randn_like(xt)
         std = self.sigma
-        return x + std * z
+        return xt + std * z
 
-    def drift(self, t, x, x0, x1):
+    def drift(self, state: MultiModeState, batch: DataCoupling):
+        x0 = batch.source.continuous
+        x1 = batch.target.continuous
+        xt = state.continuous
         A = 0.0
         B = 1.0
         C = -1.0
-        return A * x + B * x1 + C * x0
+        return A * xt + B * x1 + C * x0
 
-    def diffusion(self, t):
+    def diffusion(self, state: MultiModeState):
         return 0.0
 
     def solver_step(self, state, heads, delta_t):
@@ -53,22 +60,29 @@ class SchrodingerBridge:
     def __init__(self, config: dataclass):
         self.sigma = config.model.sigma
 
-    def sample(self, t, x0, x1):
+    def sample(self, t, batch: DataCoupling):
+        x0 = batch.source.continuous
+        x1 = batch.target.continuous
         x = t * x1 + (1.0 - t) * x0
         z = torch.randn_like(x)
         std = self.sigma * torch.sqrt(t * (1.0 - t))
         return x + std * z
 
-    def drift(self, t, x, x0, x1):
+    def drift(self, state: MultiModeState, batch: DataCoupling):
+        x0 = batch.source.continuous
+        x1 = batch.target.continuous
+        xt = state.continuous
+        t = state.time
         A = (1 - 2 * t) / (t * (1 - t))
         B = t**2 / (t * (1 - t))
         C = -1 * (1 - t) ** 2 / (t * (1 - t))
-        return A * x + B * x1 + C * x0
+        return A * xt + B * x1 + C * x0
 
-    def diffusion(self, t):
+    def diffusion(self, state: MultiModeState):
+        t = state.time
         return self.sigma * torch.sqrt(t * (1.0 - t))
 
-    def solver_step(self, state, heads, delta_t):
+    def solver_step(self, state: MultiModeState, heads: MultiModeState, delta_t):
         """Euler-Maruyama step for SDE solver"""
         diffusion = self.diffusion(delta_t)
         delta_w = torch.randn_like(state.continuous)
@@ -90,30 +104,32 @@ class TelegraphBridge:
         self.time_epsilon = config.model.time_eps
         self.vocab_size = config.data.vocab_size
 
-    def sample(self, t, k0, k1):
+    def sample(self, t, batch: DataCoupling):
+        k0 = batch.source.discrete
+        k1 = batch.target.discrete
         transition_probs = self.transition_probability(t, k0, k1)
-        state = Categorical(transition_probs).sample().to(k1.device)
-        if state.dim() == 2:
-            state = state.unsqueeze(-1)
-        return state
+        drwan_state = Categorical(transition_probs).sample().to(k1.device)
+        if drwan_state.dim() == 2:
+            drwan_state = drwan_state.unsqueeze(-1)
+        return drwan_state
 
-    def rate(self, t, k, logits):
+    def rate(self, state: MultiModeState, heads: MultiModeState):
         """t: (b, 1) time tensor
         k: (b, n, 1) current state tensor
         logits: (b, n, vocab_size) logits tensor
         """
+        t = state.time
+        k = state.discrete
+        logits = heads.discrete
+
         assert (k >= 0).all() and (k < self.vocab_size).all(), (
             "Values in `k` outside of bound! k_min={}, k_max={}".format(
                 k.min(), k.max()
             )
         )
 
-        qx = softmax(
-            logits, dim=2
-        )  # softmax to get the transition probabilities for all states
-        qy = torch.gather(
-            qx, 2, k.long()
-        )  # get probabilities for the current state `k`
+        qx = softmax(logits, dim=2) # transition probabilities to all states
+        qy = torch.gather(qx, 2, k.long())  # current state prob
 
         # ...Telegraph process rates:
 
@@ -123,8 +139,7 @@ class TelegraphBridge:
         A = 1.0
         B = (wt * S) / (1.0 - wt)
         C = wt
-        rate = A + B[:, None, None] * qx + C[:, None, None] * qy
-        return rate
+        return A + B[:, None, None] * qx + C[:, None, None] * qy
 
     def transition_probability(self, t, k0, k1):
         """
@@ -133,7 +148,7 @@ class TelegraphBridge:
         \end{equation}
         """
         # ...reshape input tenors:
-        t = t.squeeze()
+        t = t.clone().squeeze()  # shape: (B)
         if k0.dim() == 1:
             k0 = k0.unsqueeze(1)  # Add an extra dimension if needed
         if k1.dim() == 1:
@@ -141,7 +156,10 @@ class TelegraphBridge:
 
         # ...set state configurations:
         k = torch.arange(0, self.vocab_size)  # shape: (vocab_size,)
-        k = k[None, None, :].repeat(k0.size(0), k0.size(1), 1).float()
+        k = (
+            k[None, None, :].repeat(k0.size(0), k0.size(1), 1).float()
+        )  # shape: (B, N, vocab_size)
+        # k = k.expand(k0.size(0), k0.size(1), -1)  # shape: (B, N, vocab_size)
         k = k.to(k0.device)
 
         # ...compute probabilities:
@@ -173,7 +191,7 @@ class TelegraphBridge:
 
     def solver_step(self, state, heads, delta_t):
         """tau-leaping step for master equation solver"""
-        rates = self.rate(t=state.time, k=state.discrete, logits=heads.discrete)
+        rates = self.rate(state, heads)
         assert (rates >= 0).all(), "Negative rates!"
         state.discrete = state.discrete.squeeze(-1)
         # max_rate = torch.max(rates, dim=2)[1]

@@ -75,8 +75,8 @@ class ExperimentPipeline:
             self.config = self.model.config
             self.logger = self._setup_logger(new_experiment=False)
 
+        self.config.update(self.config_update)
         self.callbacks = self._setup_callbacks_list()
-        self.config.update(self.config_update, verbose=True)
         self.datamodule = self._setup_datamodule()
 
     def train(self):
@@ -136,14 +136,15 @@ class ExperimentPipeline:
         """
         Initialize a new CometLogger instance for a new experiment.
         """
-        logger = CometLogger(**self.config.comet_logger.to_dict())
+        logger = CometLogger(**self.config.comet_logger.__dict__)
         logger.experiment.log_parameters(self.config.to_dict())
         self.config.comet_logger.experiment_key = logger.experiment.get_key()
-        self.config.path = os.path.join(
+        path = os.path.join(
             self.config.comet_logger.save_dir,
             self.config.comet_logger.project_name,
             self.config.comet_logger.experiment_key,
         )
+        self.config.update({"path": path})
         log.info(f"Experiment path: {self.config.path}")
         return logger
 
@@ -160,7 +161,7 @@ class ExperimentPipeline:
             experiment_key=self.config.comet_logger.experiment_key,
         )
         experiment.log_parameters(self.config.to_dict())
-        return CometLogger(**self.config.comet_logger.to_dict())
+        return CometLogger(**self.config.comet_logger.__dict__)
 
     def _setup_datamodule(self):
         """
@@ -183,14 +184,12 @@ class ExperimentPipeline:
         """
         callbacks = []
         callbacks.append(RichProgressBar(theme=RichProgressBarTheme(**progress_bar)))
-        callbacks.append(ModelCheckpointCallback(self.config.clone()))
-        callbacks.append(ExperimentLoggerCallback(self.config.clone()))
-        callbacks.append(JetsGenerativeCallback(self.config.clone()))
+        callbacks.append(ModelCheckpointCallback(self.config))
+        callbacks.append(ExperimentLoggerCallback(self.config))
+        callbacks.append(JetsGenerativeCallback(self.config))
         return callbacks
 
-    def _setup_trainer(
-        self,
-    ) -> L.Trainer:
+    def _setup_trainer(self) -> L.Trainer:
         """
         Configure the PyTorch Lightning trainer dynamically.
         """

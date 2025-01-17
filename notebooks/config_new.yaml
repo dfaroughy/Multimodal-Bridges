@@ -4,13 +4,12 @@ checkpoints:
   mode: min
   monitor: val_loss
   save_last: true
-  save_top_k: 3
+  save_top_k: 10
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
-  experiment_key: 0bfa9c6b34ca404aa91a3b0cdb5cff6e
-  experiment_name: pytest
+  experiment_name: null
   project_name: multimodal-jets
-  save_dir: /home/df630/Multimodal-Bridges/tests/output
+  save_dir: /home/df630/Multimodal-Bridges/experiments/results/comet
   workspace: dfaroughy
 data:
   batch_size: 1024
@@ -20,7 +19,8 @@ data:
   dim_discrete: 1
   max_num_particles: 128
   min_num_particles: 0
-  num_jets: 100
+  modality: hybrid
+  num_jets: 100000
   num_workers: 0
   pin_memory: false
   source_name: GaussNoise
@@ -34,21 +34,30 @@ data:
   target_name: AspenOpenJets
   target_preprocess_continuous: standardize
   target_preprocess_discrete: tokenize
-  target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
-  target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
+  target_test_path:
+  - /home/df630/CMB/data/AOJ/2016H_job8.h5
+  - /home/df630/CMB/data/AOJ/2016H_job9.h5
+  target_train_path:
+  - /home/df630/CMB/data/AOJ/2016H_job0.h5
+  - /home/df630/CMB/data/AOJ/2016H_job1.h5
+  - /home/df630/CMB/data/AOJ/2016H_job2.h5
+  - /home/df630/CMB/data/AOJ/2016H_job3.h5
+  - /home/df630/CMB/data/AOJ/2016H_job4.h5
+  - /home/df630/CMB/data/AOJ/2016H_job5.h5
+  - /home/df630/CMB/data/AOJ/2016H_job6.h5
+  - /home/df630/CMB/data/AOJ/2016H_job7.h5
   vocab_size: 8
   vocab_size_context: 0
 encoder:
-  activation: ReLU
   dim_emb_augment_continuous: 0
   dim_emb_augment_discrete: 0
   dim_emb_context_continuous: 0
   dim_emb_context_discrete: 0
   dim_emb_continuous: 16
   dim_emb_discrete: 16
-  dim_emb_time: 16
-  dim_hidden_continuous: 32
-  dim_hidden_discrete: 32
+  dim_emb_time: 32
+  dim_hidden_glob: 32
+  dim_hidden_local: 128
   dropout: 0.2
   embed_type_augment_continuous: null
   embed_type_augment_discrete: null
@@ -57,19 +66,22 @@ encoder:
   embed_type_continuous: Linear
   embed_type_discrete: LookupTable
   embed_type_time: SinusoidalPositionalEncoding
-  name: MultiModalParticleTransformer
-  num_heads: 4
+  name: MultiModalEPiC
+  num_blocks: 12
+  skip_connection: true
 model:
   bridge_continuous: LinearUniformBridge
   bridge_discrete: TelegraphBridge
   gamma: 0.125
   loss_weights: learnable
-  num_timesteps: 100
+  num_timesteps: 200
   sigma: 0.0001
   time_eps: 0.0001
-optimizer:
-  name: AdamW
-  params:
+trainer:
+  gradient_clip_val: 1.0
+  max_epochs: 100
+  optimizer_name: AdamW
+  optimizer_params:
     amsgrad: false
     betas:
     - 0.9
@@ -77,13 +89,8 @@ optimizer:
     eps: 1.0e-08
     lr: 0.0002
     weight_decay: 5.0e-05
-path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/0bfa9c6b34ca404aa91a3b0cdb5cff6e
-scheduler:
-  name: CosineAnnealingLR
-  params:
-    T_max: 1000
+  scheduler_name: CosineAnnealingLR
+  scheduler_params:
+    T_max: 100
     eta_min: 1.0e-05
     last_epoch: -1
-trainer:
-  gradient_clip_val: 1.0
-  max_epochs: 10

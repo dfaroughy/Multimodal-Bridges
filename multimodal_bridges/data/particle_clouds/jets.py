@@ -14,9 +14,8 @@ plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
 
 from utils.helpers import SimpleLogger as log
-from utils.helpers import get_from_json
 from data.particle_clouds.particles import ParticleClouds
-from data.datasets import HybridDataset, hybrid_collate_fn
+from data.datasets import MultiModalCouplingDataset, data_coupling_collate_fn
 
 
 class JetDataModule(L.LightningDataModule):
@@ -48,7 +47,7 @@ class JetDataModule(L.LightningDataModule):
         if stage == "fit" or stage is None:
             log.info("Setting up datasets for training...")
             self._prepare_fit_datasets(preprocess=self.preprocess)
-            dataset = HybridDataset(self)
+            dataset = MultiModalCouplingDataset(self)
             idx0, idx1 = self._idx_data_split(dataset, self.split_ratios)
             self.train_dataset = Subset(dataset, idx0) if idx0 else None
             self.val_dataset = Subset(dataset, idx1) if idx1 else None
@@ -56,7 +55,7 @@ class JetDataModule(L.LightningDataModule):
         if stage == "predict":
             log.info("Setting up datasets for generation...")
             self._prepare_predict_datasets(preprocess=self.preprocess)
-            self.predict_dataset = HybridDataset(self)
+            self.predict_dataset = MultiModalCouplingDataset(self)
 
     def train_dataloader(self):
         return self._get_dataloader(self.train_dataset, shuffle=True)
@@ -78,7 +77,7 @@ class JetDataModule(L.LightningDataModule):
             num_workers=self.num_workers,
             pin_memory=self.pin_memory,
             shuffle=shuffle,
-            collate_fn=hybrid_collate_fn,
+            collate_fn=data_coupling_collate_fn,
         )
 
     def _prepare_fit_datasets(self, preprocess=True):
@@ -104,6 +103,8 @@ class JetDataModule(L.LightningDataModule):
         self.metadata["source_data_stats"] = self.source.get_data_stats()
         self.metadata["target_data_stats"] = self.target.get_data_stats()
         self._store_metadata()
+
+        self._clear_unavailable_modes()  # remove the data mode that is not needed
 
         if preprocess:
             log.info("Preprocessing source/target fit datasets...")
@@ -138,6 +139,8 @@ class JetDataModule(L.LightningDataModule):
             else None,
         )
 
+        self._clear_unavailable_modes()  # remove the data mode that is not needed
+
         if preprocess:
             self.metadata["source_data_stats"] = self.source.get_data_stats()
             log.info("Preprocessing source predict datasets...")
@@ -147,14 +150,19 @@ class JetDataModule(L.LightningDataModule):
                 **self.metadata["source_data_stats"],
             )
 
-    def _store_metadata(self):
-        # only necesary for tests
-        if self.metadata_path:
-            log.info("Storing metadata at: {path}")
-            path = os.path.join(self.metadata_path, "metadata.json")
-            if not os.path.exists(path):
-                with open(path, "w") as f:
-                    json.dump(self.metadata, f, indent=4)
+    def _clear_unavailable_modes(self):
+        if self.config.data.modality == "continuous":
+            del self.source.discrete
+            del self.target.discrete
+        elif self.config.data.modality == "discrete":
+            del self.source.continuous
+            del self.target.continuous
+        elif self.config.data.modality == "multi-modal":
+            pass
+        else:
+            raise ValueError(
+                "Invalid data modality. Specify 'continuous', 'discrete', or 'multi-modal'."
+            )
 
     def _idx_data_split(self, dataset, ratios):
         assert np.abs(1.0 - sum(ratios)) < 1e-3, "Split ratios not sum to 1!"
@@ -171,41 +179,50 @@ class JetDataModule(L.LightningDataModule):
         return idx_train, idx_valid
 
     def _get_metadata(self):
-            self.metadata = {}
-            self.metadata["continuous_features"] = {"pt": 0, "eta_rel": 1, "phi_rel": 2}
-            self.metadata["discrete_features"] = {
-                "isPhoton": [1, 0, 0, 0, 0],
-                "isNeutralHadron": [0, 1, 0, 0, 0],
-                "isChargedHadron": [0, 0, 1, 0, 0],
-                "isElectron": [0, 0, 0, 1, 0],
-                "isMuon": [0, 0, 0, 0, 1],
-            }
-            self.metadata["electric_charges"] = [-1, 0, 1]
-            self.metadata["particles_info"] = {
-                0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
-                1: {
-                    "name": "neutral hadron",
-                    "color": "darkred",
-                    "marker": "o",
-                    "tex": r"$\rm h^0$",
-                },
-                2: {
-                    "name": "negative hadron",
-                    "color": "darkred",
-                    "marker": "v",
-                    "tex": r"$\rm h^-$",
-                },
-                3: {
-                    "name": "positive hadron",
-                    "color": "darkred",
-                    "marker": "^",
-                    "tex": r"$\rm h^+$",
-                },
-                4: {"name": "electron", "color": "blue", "marker": "v", "tex": r"e^-"},
-                5: {"name": "positron", "color": "blue", "marker": "^", "tex": r"e^+"},
-                6: {"name": "muon", "color": "green", "marker": "v", "tex": r"\mu^-"},
-                7: {"name": "antimuon", "color": "green", "marker": "^", "tex": r"\mu^+"},
-            }
+        self.metadata = {}
+        self.metadata["continuous_features"] = {"pt": 0, "eta_rel": 1, "phi_rel": 2}
+        self.metadata["discrete_features"] = {
+            "isPhoton": [1, 0, 0, 0, 0],
+            "isNeutralHadron": [0, 1, 0, 0, 0],
+            "isChargedHadron": [0, 0, 1, 0, 0],
+            "isElectron": [0, 0, 0, 1, 0],
+            "isMuon": [0, 0, 0, 0, 1],
+        }
+        self.metadata["electric_charges"] = [-1, 0, 1]
+        self.metadata["particles_info"] = {
+            0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
+            1: {
+                "name": "neutral hadron",
+                "color": "darkred",
+                "marker": "o",
+                "tex": r"$\rm h^0$",
+            },
+            2: {
+                "name": "negative hadron",
+                "color": "darkred",
+                "marker": "v",
+                "tex": r"$\rm h^-$",
+            },
+            3: {
+                "name": "positive hadron",
+                "color": "darkred",
+                "marker": "^",
+                "tex": r"$\rm h^+$",
+            },
+            4: {"name": "electron", "color": "blue", "marker": "v", "tex": r"e^-"},
+            5: {"name": "positron", "color": "blue", "marker": "^", "tex": r"e^+"},
+            6: {"name": "muon", "color": "green", "marker": "v", "tex": r"\mu^-"},
+            7: {"name": "antimuon", "color": "green", "marker": "^", "tex": r"\mu^+"},
+        }
+
+    def _store_metadata(self):
+        # only necesary for tests
+        if self.metadata_path:
+            log.info("Storing metadata at: {path}")
+            path = os.path.join(self.metadata_path, "metadata.json")
+            if not os.path.exists(path):
+                with open(path, "w") as f:
+                    json.dump(self.metadata, f, indent=4)
 
 
 class JetClassHighLevelFeatures:
@@ -456,91 +473,3 @@ class JetClassHighLevelFeatures:
         x = getattr(self, feature)
         y = getattr(reference, feature)
         return scipy.stats.wasserstein_distance(x, y)
-
-
-# class JetDataModule:
-#     """class that prepares the source-target coupling"""
-
-#     def __init__(self, config, preprocess=False, metadata_path=None):
-
-#         self.metadata = {}
-#         self.metadata["continuous_features"] = {'pt': 0, 'eta_rel': 1, 'phi_rel': 2}
-#         self.metadata["discrete_featsures"] = {
-#             "isPhoton": [1, 0, 0, 0, 0],
-#             "isNeutralHadron": [0, 1, 0, 0, 0],
-#             "isChargedHadron": [0, 0, 1, 0, 0],
-#             "isElectron": [0, 0, 0, 1, 0],
-#             "isMuon": [0, 0, 0, 0, 1],
-#         }
-#         self.metadata["electric_charges"] = [-1, 0, 1]
-#         self.metadata["particles_info"] = {
-#             0: {"name": "photon", "color": "gold", "marker": "o", "tex": r"\gamma"},
-#             1: {
-#                 "name": "neutral hadron",
-#                 "color": "darkred",
-#                 "marker": "o",
-#                 "tex": r"$\rm h^0$",
-#             },
-#             2: {
-#                 "name": "negative hadron",
-#                 "color": "darkred",
-#                 "marker": "v",
-#                 "tex": r"$\rm h^-$",
-#             },
-#             3: {
-#                 "name": "positive hadron",
-#                 "color": "darkred",
-#                 "marker": "^",
-#                 "tex": r"$\rm h^+$",
-#             },
-#             4: {"name": "electron", "color": "blue", "marker": "v", "tex": r"e^-"},
-#             5: {"name": "positron", "color": "blue", "marker": "^", "tex": r"e^+"},
-#             6: {"name": "muon", "color": "green", "marker": "v", "tex": r"\mu^-"},
-#             7: {"name": "antimuon", "color": "green", "marker": "^", "tex": r"\mu^+"},
-#         }
-
-#         # ...define target and source:
-
-#         self.target = ParticleClouds(
-#             dataset=config.data.target_name,
-#             path=config.data.target_path,
-#             num_jets=config.data.num_jets,
-#             min_num_particles=config.data.min_num_particles,
-#             max_num_particles=config.data.max_num_particles,
-#         )
-#         self.source = ParticleClouds(
-#             dataset=config.data.source_name,
-#             path=config.data.source_path,
-#             num_jets=config.data.num_jets,
-#             min_num_particles=config.data.min_num_particles,
-#             max_num_particles=config.data.max_num_particles,
-#             multiplicity_dist=self.target.multiplicity
-#             if "Noise" in config.data.source_name
-#             else None,
-#         )
-
-#         self.metadata["source_data_stats"] = self.source.get_data_stats()
-#         self.metadata["target_data_stats"] = self.target.get_data_stats()
-
-#         # ...preprocess if needed:
-
-#         if preprocess:
-#             self.source.preprocess(
-#                 continuous=config.data.source_preprocess_continuous,
-#                 discrete=config.data.source_preprocess_discrete,
-#                 **self.metadata["source_data_stats"],
-#             )
-#             self.target.preprocess(
-#                 continuous=config.data.target_preprocess_continuous,
-#                 discrete=config.data.target_preprocess_discrete,
-#                 **self.metadata["target_data_stats"],
-#             )
-#             self.store_metadata(path=metadata_path)
-
-#     def store_metadata(self, path):
-#         if path:
-#             log.info(f"Storing metadata at: {path}")
-#             self.metadata_path = os.path.join(path, "metadata.json")
-#             if not os.path.exists(self.metadata_path):
-#                 with open(self.metadata_path, "w") as f:
-#                     json.dump(self.metadata, f, indent=4)
