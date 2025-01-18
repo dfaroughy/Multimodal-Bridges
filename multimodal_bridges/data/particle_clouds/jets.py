@@ -225,7 +225,7 @@ class JetDataModule(L.LightningDataModule):
                     json.dump(self.metadata, f, indent=4)
 
 
-class JetClassHighLevelFeatures:
+class ParticleCloudsHighLevelFeatures:
     def __init__(self, constituents: ParticleClouds):
         self.constituents = constituents
 

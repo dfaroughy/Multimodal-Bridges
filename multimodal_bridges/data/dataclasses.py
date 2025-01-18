@@ -1,4 +1,5 @@
 import torch
+import h5py
 from dataclasses import dataclass
 from typing import List
 
@@ -77,6 +78,29 @@ class MultiModeState:
         if self.discrete is not None:
             available_modes.append("discrete")
         return available_modes
+
+    def save_to(self, path):
+        with h5py.File(path, "w") as f:
+            for mode in self.available_modes():
+                f.create_dataset(mode, data=getattr(self, mode))
+            f.create_dataset("mask", data=self.mask)
+
+    @classmethod
+    def load_from(cls, path: str) -> "MultiModeState":
+
+        time, continuous, discrete, mask = None, None, None, None
+        
+        with h5py.File(path, "r") as f:
+            if "time" in f:
+                time = torch.from_numpy(f["time"][:])
+            if "continuous" in f:
+                continuous = torch.from_numpy(f["continuous"][:])
+            if "discrete" in f:
+                discrete = torch.from_numpy(f["discrete"][:])
+            if "mask" in f:
+                mask = torch.from_numpy(f["mask"][:])
+
+        return cls(time, continuous, discrete, mask)
 
     def _apply_fn(self, func):
         """apply transformation function to all attributes."""
