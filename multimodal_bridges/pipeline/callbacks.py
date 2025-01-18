@@ -1,6 +1,8 @@
 import os
 import json
 import torch
+import glob
+import numpy as np
 from pathlib import Path
 from typing import Dict
 import matplotlib.pyplot as plt
@@ -13,7 +15,7 @@ from pipeline.configs import ExperimentConfigs
 from pipeline.helpers import get_from_json
 from pipeline.helpers import SimpleLogger as log
 from data.particle_clouds.particles import ParticleClouds
-from data.particle_clouds.jets import JetClassHighLevelFeatures
+from data.particle_clouds.jets import ParticleCloudsHighLevelFeatures
 from model.multimodal_bridge_matching import MultiModeState
 
 
@@ -129,9 +131,8 @@ class JetsGenerativeCallback(Callback):
         self.batched_target_states = []
 
     def on_predict_start(self, trainer, pl_module):
-        print(self.config.path)
-        self.data_dir = os.path.join(self.config.path, "data")
-        self.metric_dir = os.path.join(self.config.path, "metrics")
+        self.data_dir = Path(self.config.path) / "data"
+        self.metric_dir = Path(self.config.path) / "metrics"
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.metric_dir, exist_ok=True)
 
@@ -142,34 +143,69 @@ class JetsGenerativeCallback(Callback):
             self.batched_target_states.append(outputs[2])
 
     def on_predict_end(self, trainer, pl_module):
-        # ...generated sample
-        gen_sample = MultiModeState.cat(self.batched_gen_states)
-        self.gen_sample = ParticleClouds(dataset=gen_sample)
+        rank = trainer.global_rank
+
+        self._save_results_local(rank)
+        trainer.strategy.barrier()  # wait for all ranks to finish
+
+        if trainer.is_global_zero:
+            self._gather_results_global(trainer)
+
+        self._clean_temp_files()
+
+    def _save_results_local(self, rank):
+        random = np.random.randint(0, 1000)
+
+        gen_raw = MultiModeState.cat(self.batched_gen_states)
+        test_raw = MultiModeState.cat(self.batched_target_states)
+
+        gen_raw.save_to(f"{self.data_dir}/temp_gen_{rank}_{random}.h5")
+        test_raw.save_to(f"{self.data_dir}/temp_test_{rank}_{random}.h5")
+
+    @rank_zero_only
+    def _gather_results_global(self, trainer):
+        stats = get_from_json("target_data_stats", self.config.path, "metadata.json")
         prep_continuous = self.config.data.target_preprocess_continuous
         prep_discrete = self.config.data.target_preprocess_discrete
-        stats = get_from_json('target_data_stats', self.config.path, 'metadata.json')
-        self.gen_sample.postprocess(prep_continuous, prep_discrete, **stats)
-        gen_jets = JetClassHighLevelFeatures(constituents=self.gen_sample)
 
-        # ...test sample
-        test_sample = MultiModeState.cat(self.batched_target_states)
-        self.test_sample = ParticleClouds(dataset=test_sample)
-        test_jets = JetClassHighLevelFeatures(constituents=self.test_sample)
+        gen_files = sorted(self.data_dir.glob("temp_gen*.h5"))
+        test_files = sorted(self.data_dir.glob("temp_test*.h5"))
 
-        # ...log results
+        gen_states = [MultiModeState.load_from(str(f)) for f in gen_files]
+        test_states = [MultiModeState.load_from(str(f)) for f in test_files]
+
+        gen_merged = MultiModeState.cat(gen_states)
+        test_merged = MultiModeState.cat(test_states)
+
+        gen_clouds = ParticleClouds(dataset=gen_merged)
+        gen_clouds.postprocess(prep_continuous, prep_discrete, **stats)
+        gen_clouds.save_to(f"{self.data_dir}/generated_sample.h5")
+
+        test_clouds = ParticleClouds(dataset=test_merged)
+        test_clouds.save_to(f"{self.data_dir}/test_sample.h5")
+
+        gen_jets = ParticleCloudsHighLevelFeatures(constituents=gen_clouds)
+        test_jets = ParticleCloudsHighLevelFeatures(constituents=test_clouds)
+
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
-        self.gen_sample.save_to(path=os.path.join(self.data_dir, "generated_sample.h5"))
-        self.test_sample.save_to(path=os.path.join(self.data_dir, "test_sample.h5"))
-        with open(os.path.join(self.metric_dir, "performance_metrics.json"), "w") as f:
+
+        with open(self.metric_dir / "performance_metrics.json", "w") as f:
             json.dump(metrics, f, indent=4)
 
         if hasattr(self.config, "comet_logger"):
             figures = self.get_results_plots(gen_jets, test_jets)
             trainer.logger.experiment.log_metrics(metrics)
+
             for key in figures.keys():
                 trainer.logger.experiment.log_figure(
                     figure=figures[key], figure_name=key
                 )
+
+    def _clean_temp_files(self):
+        for f in self.data_dir.glob("temp_generated_sample*.h5"):
+            f.unlink()
+        for f in self.data_dir.glob("temp_test_sample*.h5"):
+            f.unlink()
 
     def compute_performance_metrics(self, gen_jets, test_jets):
         return {
