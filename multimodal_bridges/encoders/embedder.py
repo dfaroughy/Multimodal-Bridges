@@ -144,62 +144,51 @@ class MultiModalParticleCloudEmbedder(nn.Module):
             )
 
     def forward(
-        self, state: MultiModeState, source: MultiModeState, context: MultiModeState
-    ) -> Tuple[MultiModeState, MultiModeState]:
+        self, state: MultiModeState, batch: MultiModeState) -> Tuple[MultiModeState, MultiModeState]:
     
-        reshape = (*tuple(state.shape), -1)
+        continuous_feats, discrete_feats = None, None
+        continuous_context, discrete_context = None, None
 
-        # Initialize states
-        state_loc = MultiModeState(mask=state.mask)
-        state_glob = MultiModeState()
+        reshape = (*tuple(state.shape), -1)
 
         # Embed time
         t_emb = self.embedding_time(state.time.squeeze(-1))
-
-        state_glob.time = t_emb.clone().to(t_emb.device)  # (B, dim_time_emb)
-        state_loc.time = t_emb.unsqueeze(1).repeat(1, state.shape[-1], 1)  # (B, N, dim_time_emb)
-        state_loc.time *= state.mask
-
-        # Augment with source data:
-        if self.augmentation:
-            state.continuous = torch.cat([state.continuous, source.continuous], dim=-1)
-            state.discrete = torch.cat([state.discrete, source.discrete], dim=-1)
+        time_context = t_emb.clone().to(t_emb.device)  # (B, dim_time_emb)
+        time = t_emb.unsqueeze(1).repeat(1, state.shape[-1], 1)  # (B, N, dim_time_emb)
 
         # Embed features
-        x_feats, k_feats = [], []
+        if state.has_continuous:
+            if self.augmentation:
+                continuous_feats = torch.cat([state.continuous, batch.source.continuous], dim=-1)
+            else:
+                continuous_feats = state.continuous
+            if hasattr(self, "embedding_continuous"):
+                continuous_feats = self.embedding_continuous(continuous_feats)
 
-        if hasattr(self, "embedding_continuous"):
-            x_feats.append(self.embedding_continuous(state.continuous))
-        else:
-            if "continuous" in state.available_modes():
-                x_feats.append(state.continuous)
+        if state.has_discrete:
+            discrete_feats = state.discrete
+            if hasattr(self, "embedding_discrete"):
+                discrete_feats = self.embedding_discrete(discrete_feats).view(*reshape)
 
-        if hasattr(self, "embedding_discrete"):
-            k_feats.append(self.embedding_discrete(state.discrete).view(*reshape))
-        else:
-            if "discrete" in state.available_modes():
-                k_feats.append(state.discrete.view(*reshape))
-
-        # Assign embedded features
-        if x_feats:
-            state_loc.continuous = torch.cat(x_feats, dim=-1) * state.mask
-        if k_feats:
-            state_loc.discrete = torch.cat(k_feats, dim=-1) * state.mask
+        state_loc = MultiModeState(time, continuous_feats, discrete_feats, state.mask)
+        state_loc.apply_mask()
 
         # Embed context
-        if hasattr(self, "embedding_context_continuous"):
-            state_glob.continuous = self.embedding_context_continuous(
-                context.continuous
-            )
-        else:
-            state_glob.continuous = context.continuous
+        if batch.has_context: 
 
-        if hasattr(self, "embedding_context_discrete"):
-            state_glob.discrete = self.embedding_context_discrete(
-                context.discrete
-            ).view(len(context), -1)
-        else:
-            state_glob.discrete = context.discrete
+            reshape = (*tuple(batch.context), -1)
+
+            if batch.context.has_continuous:
+                continuous_context = batch.context.continuous
+                if hasattr(self, "embedding_context_continuous"):
+                    continuous_context = self.embedding_context_continuous(continuous_context)
+
+            if batch.context.has_discrete:
+                discrete_context = batch.context.discrete
+                if hasattr(self, "embedding_context_discrete"):
+                    discrete_context = self.embedding_context_discrete(discrete_context).view(reshape)
+
+        state_glob = MultiModeState(time_context, continuous_context, discrete_context, None)
 
         return state_loc, state_glob
 
