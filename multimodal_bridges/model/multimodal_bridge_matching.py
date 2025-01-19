@@ -31,6 +31,13 @@ class MultiModalBridgeMatching(L.LightningModule):
             self.bridge_discrete = Bridge[config.model.bridge_discrete](config)
             self.loss_discrete_fn = nn.CrossEntropyLoss(reduction="none")
 
+        if config.model.loss_weights=='learnable'
+            loss_weights = nn.Parameter(torch.tensor([0.0, 0.0]))
+            self.loss_multimode = MultiModeLoss(mode='learnable', loss_weights )
+        else:
+            loss_weights = config.model.loss_weights
+            self.loss_multimode = MultiModeLoss(mode='fixed', loss_weights )
+
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)
         self.save_hyperparameters()
 
@@ -45,7 +52,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         state = state.to(self.device)
         heads = self.forward(state, batch)
         loss_continuous, loss_discrete = self.loss_fn(heads, state, batch)
-        loss, weights = self.loss_multimode([loss_continuous, loss_discrete])
+        loss, weights = self.loss_multimode.combine_losses([loss_continuous, loss_discrete])
 
         return {
             "loss": loss,
@@ -60,7 +67,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         state = state.to(self.device)
         heads = self.forward(state, batch)
         loss_continuous, loss_discrete = self.loss_fn(heads, state, batch)
-        loss, weights = self.loss_multimode([loss_continuous, loss_discrete])
+        loss, weights = self.loss_multimode.combine_losses([loss_continuous, loss_discrete])
         return {
             "val_loss": loss,
             "val_loss_continuous": loss_continuous,
@@ -162,7 +169,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             return t.reshape(-1, *([1] * (state.ndim - 1)))
 
 
-class MultiModeLoss(nn.Module):
+class MultiModeLoss:
     """
     Combines multiple losses with learnable weights.
     The weights are directly parameterized in the weight space (w = 1 / sigma^2).
@@ -172,12 +179,13 @@ class MultiModeLoss(nn.Module):
     def __init__(self, mode=None, weights=None):
         super().__init__()
         self.mode = mode
-        if mode == "learnable":
-            self.loss_weights = nn.Parameter(torch.tensor([0.0, 0.0]))
-        elif mode == "fixed":
-            self.loss_weights = torch.tensor(weights if weights else [1.0, 1.0])
+        # if mode == "learnable":
+        #     self.loss_weights = nn.Parameter(torch.tensor([0.0, 0.0]))
+        # elif mode == "fixed":
+        #     self.loss_weights = torch.tensor(weights if weights else [1.0, 1.0])
+        self.loss_weights = weights
 
-    def forward(self, losses) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+    def combine_losses(self, losses) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         if self.mode == "learnable":
             combined_loss = sum(
                 torch.exp(-self.loss_weights[i]) * losses[i] + self.loss_weights[i]
