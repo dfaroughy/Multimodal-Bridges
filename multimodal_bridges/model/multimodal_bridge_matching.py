@@ -51,8 +51,8 @@ class MultiModalBridgeMatching(L.LightningModule):
             "loss": loss,
             "train_loss_continuous": loss_continuous,
             "train_loss_discrete": loss_discrete,
-            "weights_continuous": weights[0],
-            "weights_discrete": weights[1],
+            "train_weights_continuous": weights[0],
+            "train_weights_discrete": weights[1],
         }
 
     def validation_step(self, batch: DataCoupling, batch_idx) -> Dict[str, torch.Tensor]:
@@ -65,8 +65,8 @@ class MultiModalBridgeMatching(L.LightningModule):
             "val_loss": loss,
             "val_loss_continuous": loss_continuous,
             "val_loss_discrete": loss_discrete,
-            "weights_continuous": weights[0],
-            "weights_discrete": weights[1],
+            "val_weights_continuous": weights[0],
+            "val_weights_discrete": weights[1],
         }
 
     def predict_step(

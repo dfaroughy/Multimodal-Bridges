@@ -84,7 +84,7 @@ class ParticleClouds:
         self.mask_bool = self.mask.squeeze(-1) > 0
 
     def __len__(self):
-        return self.continuous.shape[0]
+        return self.mask.size(0)
 
     def compute_4mom(self):
         self.px = self.pt * torch.cos(self.phi_rel)

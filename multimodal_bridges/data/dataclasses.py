@@ -58,7 +58,7 @@ class MultiModeState:
     def has_continuous(self):
         if 'continuous' in self.available_modes():
             return True
-        return false
+        return False
 
     def __len__(self):
         if self.ndim > 0:
