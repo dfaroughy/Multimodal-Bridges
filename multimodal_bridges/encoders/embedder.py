@@ -13,7 +13,7 @@ class EmbedMode(nn.Module):
     Args:
         embedding: Type of embedding ('Linear', 'MLP', etc.).
         dim_input: Input dimension size.
-        dim_hidden: Hidden/output dimension size.
+        dim_hidden: Hidden/output dimension size.   
     """
 
     def __init__(self, embedding_type, dim_input=None, dim_hidden=None):
@@ -176,7 +176,7 @@ class MultiModalParticleCloudEmbedder(nn.Module):
         # Embed context
         if batch.has_context: 
 
-            reshape = (*tuple(batch.context), -1)
+            reshape = (*tuple(batch.context.shape), -1)
 
             if batch.context.has_continuous:
                 continuous_context = batch.context.continuous

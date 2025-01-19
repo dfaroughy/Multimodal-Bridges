@@ -46,6 +46,7 @@ class MultiModalEPiC(nn.Module):
 
         local_modes = [getattr(state_local, mode) for mode in state_local.available_modes()]
         global_modes = [getattr(state_global, mode) for mode in state_global.available_modes()]
+        
         local_cat = torch.cat(local_modes, dim=-1)
         global_cat = torch.cat(global_modes, dim=-1)
 
