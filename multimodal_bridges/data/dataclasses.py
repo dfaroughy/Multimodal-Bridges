@@ -29,9 +29,12 @@ class MultiModeState:
         return self._apply_fn(lambda tensor: tensor.clone())
 
     def apply_mask(self):
-        self.time = self.time * self.mask
-        self.continuous = self.continuous * self.mask
-        self.discrete = (self.discrete * self.mask).long()
+        if 'time' in self.available_modes():
+            self.time *= self.mask
+        if 'continuous' in self.available_modes():
+            self.continuous *= self.mask
+        if 'discrete' in self.available_modes():
+            self.discrete = (self.discrete * self.mask).long()
 
     @property
     def ndim(self):
@@ -44,6 +47,18 @@ class MultiModeState:
         if self.ndim > 0:
             return getattr(self, self.available_modes()[-1]).shape[:-1]
         return None
+
+    @property 
+    def has_discrete(self):
+        if 'discrete' in self.available_modes():
+            return True
+        return False
+
+    @property
+    def has_continuous(self):
+        if 'continuous' in self.available_modes():
+            return True
+        return false
 
     def __len__(self):
         if self.ndim > 0:
@@ -132,3 +147,9 @@ class DataCoupling:
     @property
     def shape(self):
         return self.target.shape
+
+    @property
+    def has_context(self):
+        if self.context:
+            return True
+        return False

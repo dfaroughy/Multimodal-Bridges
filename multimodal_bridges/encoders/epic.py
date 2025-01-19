@@ -52,8 +52,8 @@ class MultiModalEPiC(nn.Module):
         mask = state_local.mask
 
         h = self.epic(local_cat, global_cat, mask)
-        head_continuous = h[..., : self.config.data.dim_continuous] if 'continuous' in state_local.available_modes() else None
-        head_discrete = h[..., self.config.data.dim_continuous :] if 'discrete' in state_local.available_modes() else None
+        head_continuous = h[..., : self.config.data.dim_continuous] if state_local.has_continuous else None
+        head_discrete = h[..., self.config.data.dim_continuous :] if state_local.has_discrete else None
         return MultiModeState(None, head_continuous, head_discrete, mask)
 
 
