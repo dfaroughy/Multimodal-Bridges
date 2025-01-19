@@ -33,6 +33,7 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         if config.model.loss_weights=='learnable'
             loss_weights = nn.Parameter(torch.tensor([0.0, 0.0]))
+            self.register_parameter("loss_multimode_weights", loss_weights)
             self.loss_multimode = MultiModeLoss(mode='learnable', loss_weights )
         else:
             loss_weights = config.model.loss_weights
