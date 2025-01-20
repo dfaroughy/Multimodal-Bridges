@@ -2,25 +2,22 @@ trainer:
   max_epochs: 100
   gradient_clip_val: 1.0
   optimizer_name: AdamW
-  scheduler_name: CosineAnnealingLR
   optimizer_params:
     lr: 0.0002
     weight_decay: 5.0e-5
     betas: [0.9, 0.999]
     eps: 1.e-8
     amsgrad: false
+  scheduler_name: CosineAnnealingLR
   scheduler_params:
     T_max: 100
     eta_min: 1.0e-5
     last_epoch: -1
 
 data:
-  modality: continuous
+  modality: multi-modal
   batch_size: 1024
   split_ratios: [0.7, 0.3]  # train / val / test
-  num_workers: 0
-  pin_memory: false
-
   target_name: AspenOpenJets
   source_name: GaussNoise
   target_train_path: 
@@ -40,8 +37,10 @@ data:
   source_preprocess_discrete: tokenize
   min_num_particles: 0
   max_num_particles: 128
-  num_jets: 100_000
+  num_jets: 10_000
   dim_continuous: 3             # pt, eta_rel, phi_phi
+  dim_discrete: 1               # flavor x charge
+  vocab_size: 8 
 
 model:
   bridge_continuous: LinearUniformBridge
@@ -59,11 +58,12 @@ encoder:
   dim_hidden_glob: 32
   skip_connection: true
   dropout: 0.2
-  activation: ReLU
   embed_type_time: SinusoidalPositionalEncoding
   embed_type_continuous: Linear
+  embed_type_discrete: LookupTable
   dim_emb_time: 32
   dim_emb_continuous: 16
+  dim_emb_discrete: 16
 
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz

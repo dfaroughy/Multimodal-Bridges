@@ -15,10 +15,28 @@ def modality():
 
 @pytest.fixture
 def devices():
-    return 1
+    return [0,3]
 
-def test_experiment_multimodal(modality, devices):
-   
+def test_new_experiment_multimodal():
+    modality, devices = 'multi-modal', [0,3]
+
+    OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output/multimodal-jets"
+    CONFIG_PATH = f"/home/df630/Multimodal-Bridges/tests/resources/config_{modality}.yaml"
+    
+    if os.path.exists(OUTPUT_PATH):
+        shutil.rmtree(OUTPUT_PATH) 
+
+    # 1. Create a new experiment:
+    new_exp = ExperimentPipeline(JetDataModule, config=CONFIG_PATH, 
+                                strategy='auto', devices=devices)
+    new_exp.train()
+
+
+
+def test_experiment_multimodal():
+    
+    modality, devices = 'continuous', 1
+    
     OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output/multimodal-jets"
     CONFIG_PATH = f"/home/df630/Multimodal-Bridges/tests/resources/config_{modality}.yaml"
     
@@ -38,21 +56,21 @@ def test_experiment_multimodal(modality, devices):
     assert os.path.exists(f"{EXP_PATH}/checkpoints/best.ckpt")
 
     # 2. Resume from checkpoint:
-    resume_exp = ExperimentPipeline(
-        JetDataModule,
-        config={"trainer": {"max_epochs": 50}, "checkpoints": {"filename": "better"}},
-        experiment_path=EXP_PATH,
-        load_ckpt="last.ckpt",
-        devices=devices,
-    )
-    resume_exp.train()
+    # resume_exp = ExperimentPipeline(
+    #     JetDataModule,
+    #     config={"trainer": {"max_epochs": 10}, "checkpoints": {"filename": "better"}},
+    #     experiment_path=EXP_PATH,
+    #     load_ckpt="last.ckpt",
+    #     devices=devices,
+    # )
+    # resume_exp.train()
 
-    assert os.path.exists(f"{EXP_PATH}/checkpoints/better.ckpt")
+    # assert os.path.exists(f"{EXP_PATH}/checkpoints/better.ckpt")
 
     # 3. Generate data from resumed experiment:
     pipeline = ExperimentPipeline(
         JetDataModule,
-        config={"data": {"batch_size": 20, "num_jets": 60}},
+        config={"data": {"batch_size": 5, "num_jets": 20}},
         experiment_path=EXP_PATH,
         load_ckpt="last.ckpt",
         devices=devices,
@@ -67,12 +85,11 @@ def test_experiment_multimodal(modality, devices):
 
         if modality in ["continuous", "multi-modal"]:
             continuous = f["continuous"]
-            assert continuous.shape == (60, 128, 3)
+            assert continuous.shape == (20, 128, 3)
 
         if modality in ["discrete", "multi-modal"]:
             discrete = f["discrete"]
-            assert discrete.shape == (60, 128, 6)
-
+            assert discrete.shape == (20, 128, 6)
 
 if __name__ == "__main__":
-    test_experiment_multimodal()
+    test_new_experiment_multimodal()

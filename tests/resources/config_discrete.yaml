@@ -15,28 +15,24 @@ trainer:
     last_epoch: -1
 
 data:
-  modality: multi-modal
+  modality: discrete
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
   target_name: AspenOpenJets
   source_name: GaussNoise
   target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
   target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
-  target_preprocess_continuous: standardize
   target_preprocess_discrete: tokenize
   source_preprocess_discrete: tokenize
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
-  dim_continuous: 3             # pt, eta_rel, phi_phi
   dim_discrete: 1               # flavor x charge
   vocab_size: 8 
 
 model:
-  bridge_continuous: LinearUniformBridge
   bridge_discrete: TelegraphBridge
-  loss_weights: 'learnable'
-  sigma: 0.0001
+  loss_weights: 'fixed'
   gamma: 0.125
   num_timesteps: 10
   time_eps: 0.0001
@@ -50,13 +46,9 @@ encoder:
   dropout: 0.0
   data_augmentation: false
   embed_type_time: SinusoidalPositionalEncoding
-  embed_type_continuous: Linear
-  # embed_type_context_continuous: Linear
   embed_type_discrete: LookupTable
   dim_emb_time: 4
-  dim_emb_continuous: 4
   dim_emb_discrete: 4
-  # dim_emb_context_continuous: 2
 
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
