@@ -4,6 +4,7 @@ from dataclasses import dataclass, field, asdict
 from typing import Optional, Dict, List, Union
 from pipeline.helpers import SimpleLogger as log
 
+
 @dataclass
 class CometLoggerConfig:
     project_name: str
@@ -93,7 +94,6 @@ class CheckpointsConfig:
     save_last: bool = True
 
 
-@dataclass
 class ExperimentConfigs:
     path: str = None
     data: DataConfig = field(default_factory=DataConfig)
@@ -103,20 +103,19 @@ class ExperimentConfigs:
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
     comet_logger: CometLoggerConfig = field(default_factory=CometLoggerConfig)
 
-    # def __init__(self, config):
-    #     self._load_config(config)
+    def __init__(self, config):
+        self._load_config(config)
 
     def update(self, config):
         if isinstance(config, dict):
             for key in config:
-                if key == 'path':
-                    self.path = config['path']
+                if key == "path":
+                    self.path = config["path"]
                 else:
                     for sub_key, value in config[key].items():
                         setattr(getattr(self, key), sub_key, value)
 
-    @classmethod
-    def load(self, config: Union[dict, str]):
+    def _load_config(self, config: Union[dict, str]):
         if isinstance(config, str):
             with open(config, "r") as file:
                 config = yaml.safe_load(file)
@@ -152,7 +151,6 @@ class ExperimentConfigs:
 
     def to_dict(self):
         return asdict(self)
-
 
 
 progress_bar = {
