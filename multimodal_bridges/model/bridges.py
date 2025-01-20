@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from data.dataclasses import MultiModeState, DataCoupling
 
 
-class LinearUniformBridge:
+class UniformLinearFlow:
     """Conditional OT Flow-Matching for continuous states.
     This bridge is a linear interpolation between boundaries states at t=0 and t=1.
     notation:

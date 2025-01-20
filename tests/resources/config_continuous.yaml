@@ -29,7 +29,7 @@ data:
   dim_continuous: 3       
 
 model:
-  bridge_continuous: LinearUniformBridge
+  bridge_continuous: UniformLinearFlow
   sigma: 0.0001
   num_timesteps: 10
   time_eps: 0.0001

@@ -36,7 +36,7 @@ data:
   vocab_size_context: 7  
 
 model:
-  bridge_continuous: LinearUniformBridge
+  bridge_continuous: UniformLinearFlow
   bridge_discrete: TelegraphBridge
   loss_weights: 'learnable'
   sigma: 0.0001

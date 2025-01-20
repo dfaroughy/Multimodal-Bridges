@@ -1,10 +1,10 @@
 import torch
-from model.bridges import LinearUniformBridge, SchrodingerBridge, TelegraphBridge
+from model.bridges import UniformLinearFlow, SchrodingerBridge, TelegraphBridge
 from encoders.epic import MultiModalEPiC
 from encoders.particle_transformer import MultiModalParticleTransformer
 
 registered_bridges = {
-    "LinearUniformBridge": LinearUniformBridge,
+    "LinearUniformBridge": UniformLinearFlow,
     "SchrodingerBridge": SchrodingerBridge,
     "TelegraphBridge": TelegraphBridge,
 }

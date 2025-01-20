@@ -34,7 +34,7 @@ data:
   vocab_size_context: 7  
 
 model:
-  bridge_continuous: LinearUniformBridge
+  bridge_continuous: UniformLinearFlow
   sigma: 0.0001
   gamma: 0.125
   num_timesteps: 200
