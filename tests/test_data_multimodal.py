@@ -19,7 +19,7 @@ log.warnings_off()
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
 OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config.yaml")
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_multi-modal.yaml")
 
 
 def test_configs():

@@ -43,9 +43,7 @@ def test_continuous_encoder_EPiC(dummy_batch, dummy_state):
     config = ExperimentConfigs(CONFIG_PATH)
     embedder = MultiModalParticleCloudEmbedder(config)
     encoder = MultiModalEPiC(config)
-    state_loc, state_glob = embedder(
-        dummy_state, dummy_batch.source, dummy_batch.context
-    )
+    state_loc, state_glob = embedder(dummy_state, dummy_batch)
     head = encoder(state_loc, state_glob)
     assert head.continuous is not None
     assert head.discrete is None

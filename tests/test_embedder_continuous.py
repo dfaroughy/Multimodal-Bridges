@@ -40,7 +40,7 @@ def dummy_state():
 def test_continuous_embedder(dummy_batch, dummy_state):
     config = ExperimentConfigs(CONFIG_PATH)
     embedder = MultiModalParticleCloudEmbedder(config)
-    state_loc, state_glob = embedder(dummy_state, dummy_batch.source, dummy_batch.context)
+    state_loc, state_glob = embedder(dummy_state, dummy_batch)
 
     assert state_loc.time.shape == (
         config.data.num_jets,

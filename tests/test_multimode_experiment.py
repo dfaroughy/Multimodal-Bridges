@@ -9,39 +9,48 @@ from data.particle_clouds.jets import JetDataModule
 
 log.warnings_off()
 
+
 @pytest.fixture
 def modality():
-    return 'multi-modal'
+    return "multi-modal"
+
 
 @pytest.fixture
 def devices():
-    return [0,3]
+    return [0, 3]
+
 
 def test_new_experiment_multimodal():
-    modality, devices = 'multi-modal', [0,3]
+    modality, devices = "multi-modal", [0, 1]
 
     OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output/multimodal-jets"
-    CONFIG_PATH = f"/home/df630/Multimodal-Bridges/tests/resources/config_{modality}.yaml"
-    
+    CONFIG_PATH = (
+        f"/home/df630/Multimodal-Bridges/tests/resources/config_{modality}.yaml"
+    )
+
     if os.path.exists(OUTPUT_PATH):
-        shutil.rmtree(OUTPUT_PATH) 
+        shutil.rmtree(OUTPUT_PATH)
 
     # 1. Create a new experiment:
-    new_exp = ExperimentPipeline(JetDataModule, config=CONFIG_PATH, 
-                                strategy='auto', devices=devices)
+    new_exp = ExperimentPipeline(
+        JetDataModule,
+        config=CONFIG_PATH,
+        strategy="ddp_find_unused_parameters_true",
+        devices=devices,
+    )
     new_exp.train()
 
 
-
 def test_experiment_multimodal():
-    
-    modality, devices = 'continuous', 1
-    
+    modality, devices = "continuous", [0, 1]
+
     OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output/multimodal-jets"
-    CONFIG_PATH = f"/home/df630/Multimodal-Bridges/tests/resources/config_{modality}.yaml"
-    
+    CONFIG_PATH = (
+        f"/home/df630/Multimodal-Bridges/tests/resources/config_{modality}.yaml"
+    )
+
     if os.path.exists(OUTPUT_PATH):
-        shutil.rmtree(OUTPUT_PATH) 
+        shutil.rmtree(OUTPUT_PATH)
 
     # 1. Create a new experiment:
     new_exp = ExperimentPipeline(JetDataModule, config=CONFIG_PATH, devices=devices)
@@ -56,16 +65,14 @@ def test_experiment_multimodal():
     assert os.path.exists(f"{EXP_PATH}/checkpoints/best.ckpt")
 
     # 2. Resume from checkpoint:
-    # resume_exp = ExperimentPipeline(
-    #     JetDataModule,
-    #     config={"trainer": {"max_epochs": 10}, "checkpoints": {"filename": "better"}},
-    #     experiment_path=EXP_PATH,
-    #     load_ckpt="last.ckpt",
-    #     devices=devices,
-    # )
-    # resume_exp.train()
-
-    # assert os.path.exists(f"{EXP_PATH}/checkpoints/better.ckpt")
+    resume_exp = ExperimentPipeline(
+        JetDataModule,
+        config={"trainer": {"max_epochs": 10}, "checkpoints": {"filename": "better"}},
+        experiment_path=EXP_PATH,
+        load_ckpt="last.ckpt",
+        devices=devices,
+    )
+    resume_exp.train()
 
     # 3. Generate data from resumed experiment:
     pipeline = ExperimentPipeline(
@@ -82,7 +89,6 @@ def test_experiment_multimodal():
     assert os.path.exists(f"{EXP_PATH}/metrics/performance_metrics.json")
 
     with h5py.File(f"{EXP_PATH}/data/generated_sample.h5", "r") as f:
-
         if modality in ["continuous", "multi-modal"]:
             continuous = f["continuous"]
             assert continuous.shape == (20, 128, 3)
@@ -90,6 +96,7 @@ def test_experiment_multimodal():
         if modality in ["discrete", "multi-modal"]:
             discrete = f["discrete"]
             assert discrete.shape == (20, 128, 6)
+
 
 if __name__ == "__main__":
     test_new_experiment_multimodal()

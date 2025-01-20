@@ -42,7 +42,7 @@ model:
   sigma: 0.0001
   gamma: 0.125
   num_timesteps: 200
-  time_eps: 0.0001
+  time_eps: 0.01
 
 encoder:
   name: MultiModalEPiC

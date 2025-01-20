@@ -40,7 +40,7 @@ class LinearUniformBridge:
     def diffusion(self, state: MultiModeState):
         return 0.0
 
-    def step(self, state, heads, delta_t):
+    def forward_step(self, state, heads, delta_t):
         """Euler step for ODE solver"""
         state.continuous += delta_t * heads.continuous
         state.continuous *= state.mask
@@ -82,7 +82,7 @@ class SchrodingerBridge:
         t = state.time
         return self.sigma * torch.sqrt(t * (1.0 - t))
 
-    def step(self, state: MultiModeState, heads: MultiModeState, delta_t):
+    def forward_step(self, state: MultiModeState, heads: MultiModeState, delta_t):
         """Euler-Maruyama step for SDE solver"""
         diffusion = self.diffusion(delta_t)
         delta_w = torch.randn_like(state.continuous)
@@ -189,7 +189,7 @@ class TelegraphBridge:
         prob = 1.0 / S + w_t[:, None, None] * ((-1.0 / S) + kronecker)
         return prob
 
-    def step(self, state, heads, delta_t):
+    def forward_step(self, state, heads, delta_t):
         """tau-leaping step for master equation solver"""
         rates = self.rate(state, heads)
         assert (rates >= 0).all(), "Negative rates!"

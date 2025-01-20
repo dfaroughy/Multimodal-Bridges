@@ -48,7 +48,8 @@ class MultiModalBridgeMatching(L.LightningModule):
         heads = self.forward(state, batch)
 
         loss_continuous, loss_discrete = self.loss_fn(heads, state, batch)
-        loss, weights = self.loss_multimode([loss_continuous, loss_discrete])
+        loss = self.loss_multimode([loss_continuous, loss_discrete])
+        weights = self.loss_multimode.weight_vals()
 
         return {
             "loss": loss,
@@ -67,7 +68,8 @@ class MultiModalBridgeMatching(L.LightningModule):
         heads = self.forward(state, batch)
 
         loss_continuous, loss_discrete = self.loss_fn(heads, state, batch)
-        loss, weights = self.loss_multimode([loss_continuous, loss_discrete])
+        loss = self.loss_multimode([loss_continuous, loss_discrete])
+        weights = self.loss_multimode.weight_vals()
 
         return {
             "val_loss": loss,
@@ -80,6 +82,7 @@ class MultiModalBridgeMatching(L.LightningModule):
     def predict_step(
         self, batch: DataCoupling, batch_idx
     ) -> Tuple[MultiModeState, MultiModeState, MultiModeState]:
+        """generate target data from source by solving EOMs"""
         source_state = MultiModeState(
             None, batch.source.continuous, batch.source.discrete, batch.source.mask
         )
@@ -89,7 +92,6 @@ class MultiModalBridgeMatching(L.LightningModule):
         )
 
         initial_state = source_state.clone()
-
         final_state = self.simulate_dynamics(initial_state, batch)
 
         return final_state, source_state.detach().cpu(), target_state.detach().cpu()
@@ -105,24 +107,6 @@ class MultiModalBridgeMatching(L.LightningModule):
         return [optimizer], [scheduler]
 
     # ...Model functions
-
-    def sample_bridges(self, batch: DataCoupling) -> MultiModeState:
-        """sample stochastic bridges"""
-
-        continuous, discrete = None, None
-
-        eps = self.config.model.time_eps  # min time resolution
-        t = eps + (1 - eps) * torch.rand(len(batch), device=self.device)
-        time = self.reshape_time_dim_like(t, batch)
-
-        if batch.target.has_continuous:
-            continuous = self.bridge_continuous.sample(time, batch)
-
-        if batch.target.has_discrete:
-            discrete = self.bridge_discrete.sample(time, batch)
-
-        mask = batch.target.mask
-        return MultiModeState(time, continuous, discrete, mask)
 
     def loss_fn(
         self, heads: MultiModeState, state: MultiModeState, batch: DataCoupling
@@ -152,6 +136,24 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         return loss_continuous, loss_discrete
 
+    def sample_bridges(self, batch: DataCoupling) -> MultiModeState:
+        """sample stochastic bridges"""
+
+        continuous, discrete = None, None
+
+        eps = self.config.model.time_eps  # min time resolution
+        t = eps + (1 - eps) * torch.rand(len(batch), device=self.device)
+        time = self.reshape_time_dim_like(t, batch)
+
+        if batch.target.has_continuous:
+            continuous = self.bridge_continuous.sample(time, batch)
+
+        if batch.target.has_discrete:
+            discrete = self.bridge_discrete.sample(time, batch)
+
+        mask = batch.target.mask
+        return MultiModeState(time, continuous, discrete, mask)
+
     def simulate_dynamics(
         self, state: MultiModeState, batch: DataCoupling
     ) -> MultiModeState:
@@ -170,10 +172,10 @@ class MultiModalBridgeMatching(L.LightningModule):
             heads = self.forward(state, batch)
 
             if heads.has_continuous:
-                state = self.bridge_continuous.step(state, heads, delta_t)
+                state = self.bridge_continuous.forward_step(state, heads, delta_t)
 
             if heads.has_discrete:
-                state = self.bridge_discrete.step(state, heads, delta_t)
+                state = self.bridge_discrete.forward_step(state, heads, delta_t)
 
         return state.detach().cpu()
 
@@ -215,9 +217,9 @@ class MultiModeLoss(nn.Module):
                 self.loss_weights[i] * losses[i] for i in range(len(losses))
             )
 
-        return combined_loss, self._weights()
+        return combined_loss
 
-    def _weights(self) -> List[float]:
+    def weight_vals(self) -> List[float]:
         if self.mode == "learnable":
             return [torch.exp(-weight).item() for weight in self.loss_weights]
 
