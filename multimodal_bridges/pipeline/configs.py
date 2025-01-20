@@ -76,11 +76,11 @@ class TrainerConfig:
 class ModelConfig:
     bridge_continuous: Optional[str] = None
     bridge_discrete: Optional[str] = None
-    sigma: Optional[float] = 0.001
-    gamma: Optional[float] = 0.1
+    sigma: Optional[float] = None
+    gamma: Optional[float] = None
     loss_weights: Optional[str] = "fixed"
-    num_timesteps: int = 100
-    time_eps: float = 0.001
+    num_timesteps: int = None
+    time_eps: float = 0.0
 
 
 @dataclass
@@ -103,8 +103,8 @@ class ExperimentConfigs:
     checkpoints: CheckpointsConfig = field(default_factory=CheckpointsConfig)
     comet_logger: CometLoggerConfig = field(default_factory=CometLoggerConfig)
 
-    def __init__(self, config):
-        self._load_config(config)
+    # def __init__(self, config):
+    #     self._load_config(config)
 
     def update(self, config):
         if isinstance(config, dict):
@@ -115,7 +115,8 @@ class ExperimentConfigs:
                     for sub_key, value in config[key].items():
                         setattr(getattr(self, key), sub_key, value)
 
-    def _load_config(self, config: Union[dict, str]):
+    @classmethod
+    def load(self, config: Union[dict, str]):
         if isinstance(config, str):
             with open(config, "r") as file:
                 config = yaml.safe_load(file)
