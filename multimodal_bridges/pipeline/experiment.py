@@ -33,6 +33,7 @@ class ExperimentPipeline:
         devices: str = "auto",
         num_nodes: int = 1,
         sync_batchnorm: bool = False,
+        tags: Union[str, List[str]] = None,
     ):
         """
         Initialize the pipeline with configurations and components.
@@ -58,6 +59,7 @@ class ExperimentPipeline:
         self.sync_batchnorm = sync_batchnorm
         self.ckpt_path = None
         self.config_update = None
+        self.tags = tags
 
         if not experiment_path and config:
             log.info("starting new experiment!")
@@ -136,8 +138,13 @@ class ExperimentPipeline:
         """
         Initialize a new CometLogger instance for a new experiment.
         """
+        tags = [self.config.data.modality, f'{self.num_nodes} nodes']
+        tags += self.tags if isinstance(self.tags, list) else [self.tags]
+        
         logger = CometLogger(**self.config.comet_logger.__dict__)
         logger.experiment.log_parameters(self.config.to_dict())
+        logger.experiment.add_tags(tags)
+
         self.config.comet_logger.experiment_key = logger.experiment.get_key()
         path = os.path.join(
             self.config.comet_logger.save_dir,

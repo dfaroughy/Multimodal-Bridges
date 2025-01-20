@@ -37,6 +37,7 @@ def test_new_experiment_multimodal():
         config=CONFIG_PATH,
         strategy="ddp_find_unused_parameters_true",
         devices=devices,
+        tags="pytest",
     )
     new_exp.train()
 
@@ -53,7 +54,9 @@ def test_experiment_multimodal():
         shutil.rmtree(OUTPUT_PATH)
 
     # 1. Create a new experiment:
-    new_exp = ExperimentPipeline(JetDataModule, config=CONFIG_PATH, devices=devices)
+    new_exp = ExperimentPipeline(
+        JetDataModule, config=CONFIG_PATH, devices=devices, tags="pytest"
+    )
     new_exp.train()
 
     for subdir in os.listdir(f"{OUTPUT_PATH}"):

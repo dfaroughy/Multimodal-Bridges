@@ -4,7 +4,7 @@ from encoders.epic import MultiModalEPiC
 from encoders.particle_transformer import MultiModalParticleTransformer
 
 registered_bridges = {
-    "LinearUniformBridge": UniformLinearFlow,
+    "UniformLinearFlow": UniformLinearFlow,
     "SchrodingerBridge": SchrodingerBridge,
     "TelegraphBridge": TelegraphBridge,
 }
