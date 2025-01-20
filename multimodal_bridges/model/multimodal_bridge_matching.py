@@ -111,7 +111,8 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         continuous, discrete = None, None
 
-        t = torch.rand(len(batch), device=self.device)
+        eps = self.config.model.time_eps  # min time resolution
+        t = eps + (1 - eps) * torch.rand(len(batch), device=self.device)
         time = self.reshape_time_dim_like(t, batch)
 
         if batch.target.has_continuous:
@@ -126,7 +127,6 @@ class MultiModalBridgeMatching(L.LightningModule):
     def loss_fn(
         self, heads: MultiModeState, state: MultiModeState, batch: DataCoupling
     ) -> torch.Tensor:
-    
         loss_continuous = torch.tensor(0.0, device=self.device)
         loss_discrete = torch.tensor(0.0, device=self.device)
 
@@ -159,24 +159,21 @@ class MultiModalBridgeMatching(L.LightningModule):
         returns the final state of the bridge at the end of the time interval
         """
 
-        time_steps = torch.linspace(
-            0.0,
-            1.0 - self.config.model.time_eps,
-            self.config.model.num_timesteps,
-            device=self.device,
-        )
+        eps = self.config.model.time_eps  # min time resolution
+        steps = self.config.model.num_timesteps
 
+        time_steps = torch.linspace(eps, 1.0 - eps, steps, device=self.device)
         delta_t = (time_steps[-1] - time_steps[0]) / (len(time_steps) - 1)
 
-        for time in time_steps[1:]:
-            state.time = torch.full((len(batch), 1), time.item(), device=self.device)
+        for t in time_steps[1:]:
+            state.time = torch.full((len(batch), 1), t.item(), device=self.device)
             heads = self.forward(state, batch)
 
             if heads.has_continuous:
-                state = self.bridge_continuous.solver_step(state, heads, delta_t)
+                state = self.bridge_continuous.step(state, heads, delta_t)
 
             if heads.has_discrete:
-                state = self.bridge_discrete.solver_step(state, heads, delta_t)
+                state = self.bridge_discrete.step(state, heads, delta_t)
 
         return state.detach().cpu()
 
