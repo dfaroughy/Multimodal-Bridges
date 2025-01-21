@@ -156,9 +156,11 @@ class JetsGenerativeCallback(Callback):
     def _save_results_local(self, rank):
         random = np.random.randint(0, 1000)
 
+        src_raw = MultiModeState.cat(self.batched_source_states)
         gen_raw = MultiModeState.cat(self.batched_gen_states)
         test_raw = MultiModeState.cat(self.batched_target_states)
 
+        src_raw.save_to(f"{self.data_dir}/temp_src_{rank}_{random}.h5")
         gen_raw.save_to(f"{self.data_dir}/temp_gen_{rank}_{random}.h5")
         test_raw.save_to(f"{self.data_dir}/temp_test_{rank}_{random}.h5")
 
@@ -168,14 +170,20 @@ class JetsGenerativeCallback(Callback):
         prep_continuous = self.config.data.target_preprocess_continuous
         prep_discrete = self.config.data.target_preprocess_discrete
 
+        src_files = sorted(self.data_dir.glob("temp_src*.h5"))
         gen_files = sorted(self.data_dir.glob("temp_gen*.h5"))
         test_files = sorted(self.data_dir.glob("temp_test*.h5"))
 
+        src_states = [MultiModeState.load_from(str(f)) for f in src_files]
         gen_states = [MultiModeState.load_from(str(f)) for f in gen_files]
         test_states = [MultiModeState.load_from(str(f)) for f in test_files]
 
+        src_merged = MultiModeState.cat(src_states)
         gen_merged = MultiModeState.cat(gen_states)
         test_merged = MultiModeState.cat(test_states)
+
+        src_clouds = ParticleClouds(dataset=src_merged)
+        src_clouds.save_to(f"{self.data_dir}/source_sample.h5")
 
         gen_clouds = ParticleClouds(dataset=gen_merged)
         gen_clouds.postprocess(prep_continuous, prep_discrete, **stats)
@@ -202,9 +210,11 @@ class JetsGenerativeCallback(Callback):
                 )
 
     def _clean_temp_files(self):
-        for f in self.data_dir.glob("temp_generated_sample*.h5"):
+        for f in self.data_dir.glob("temp_src_*.h5"):
             f.unlink()
-        for f in self.data_dir.glob("temp_test_sample*.h5"):
+        for f in self.data_dir.glob("temp_gen_*.h5"):
+            f.unlink()
+        for f in self.data_dir.glob("temp_test_*.h5"):
             f.unlink()
 
     def compute_performance_metrics(self, gen_jets, test_jets):
@@ -223,6 +233,8 @@ class JetsGenerativeCallback(Callback):
                 gen_jets.constituents,
                 test_jets.constituents,
                 xlabel=r"$p_t$ [GeV]",
+                binrange=(0,400),
+                binwidth=5,
                 log=True,
             ),
             "particle rapidity": self.plot_feature(
@@ -243,6 +255,8 @@ class JetsGenerativeCallback(Callback):
                 "pt",
                 gen_jets,
                 test_jets,
+                binrange=(0,800),
+                binwidth=8,
                 xlabel=r"$p_t$ [GeV]",
             ),
             "jet rapidity": self.plot_feature(
@@ -261,6 +275,8 @@ class JetsGenerativeCallback(Callback):
                 "m",
                 gen_jets,
                 test_jets,
+                binrange=(0,250),
+                binwidth=2,
                 xlabel=r"$m$ [GeV]",
             ),
             "energy correlation function": self.plot_feature(
@@ -349,7 +365,7 @@ class JetsGenerativeCallback(Callback):
             return {**continuous_plots, **discrete_plots}
         return continuous_plots
 
-    def plot_feature(self, feat, gen, test, xlabel=None, log=False, discrete=False):
+    def plot_feature(self, feat, gen, test, xlabel=None, log=False, binwidth=None, binrange=None, discrete=False):
         fig, ax = plt.subplots(1, 1, figsize=(4, 4))
         gen.histplot(
             feat,
@@ -358,6 +374,8 @@ class JetsGenerativeCallback(Callback):
             stat="density",
             color="crimson",
             log_scale=(False, log),
+            binrange=binrange,
+            binwidth=binwidth,
             fill=False,
             label="gen",
             discrete=discrete,
@@ -369,6 +387,8 @@ class JetsGenerativeCallback(Callback):
             stat="density",
             color="k",
             log_scale=(False, log),
+            binrange=binrange,
+            binwidth=binwidth,
             fill=False,
             label="target",
             discrete=discrete,

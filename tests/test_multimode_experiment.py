@@ -43,7 +43,7 @@ def test_new_experiment_multimodal():
 
 
 def test_experiment_multimodal():
-    modality, devices = "continuous", [0, 1]
+    modality, devices = "multi-modal", [0, 1]
 
     OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output/multimodal-jets"
     CONFIG_PATH = (
@@ -55,7 +55,11 @@ def test_experiment_multimodal():
 
     # 1. Create a new experiment:
     new_exp = ExperimentPipeline(
-        JetDataModule, config=CONFIG_PATH, devices=devices, tags="pytest"
+        JetDataModule, 
+        config=CONFIG_PATH, 
+        devices=devices, 
+        strategy="ddp_find_unused_parameters_true", 
+        tags="pytest"
     )
     new_exp.train()
 
@@ -73,6 +77,7 @@ def test_experiment_multimodal():
         config={"trainer": {"max_epochs": 10}, "checkpoints": {"filename": "better"}},
         experiment_path=EXP_PATH,
         load_ckpt="last.ckpt",
+        strategy="ddp_find_unused_parameters_true",
         devices=devices,
     )
     resume_exp.train()
@@ -84,6 +89,8 @@ def test_experiment_multimodal():
         experiment_path=EXP_PATH,
         load_ckpt="last.ckpt",
         devices=devices,
+        strategy="ddp_find_unused_parameters_true",
+
     )
     pipeline.generate()
 

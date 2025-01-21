@@ -13,11 +13,7 @@ CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
 
 @pytest.fixture
 def dummy_batch():
-    source = MultiModeState(
-        continuous=torch.randn(100, 128, 3),
-        discrete=torch.randint(0, 8, (100, 128, 1)),
-        mask=torch.ones(100, 128, 1),
-    )
+    source = MultiModeState()
     target = MultiModeState(
         continuous=torch.randn(100, 128, 3),
         discrete=torch.randint(0, 8, (100, 128, 1)),

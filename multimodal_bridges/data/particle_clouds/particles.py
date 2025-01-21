@@ -12,8 +12,6 @@ from data.dataclasses import MultiModeState
 from data.particle_clouds.utils import (
     extract_jetclass_features,
     extract_aoj_features,
-    sample_noise,
-    sample_masks,
     map_basis_to_tokens,
     map_tokens_to_basis,
 )

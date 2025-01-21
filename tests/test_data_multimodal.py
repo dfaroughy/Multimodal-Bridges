@@ -35,9 +35,9 @@ def test_data_shapes():
     M = config.data.max_num_particles
     D0 = config.data.dim_continuous
     D1 = config.data.dim_discrete
-    assert jets.source.continuous.shape == torch.Size([N, M, D0])
-    assert jets.source.discrete.shape == torch.Size([N, M, D1])
-    assert jets.source.mask.shape == torch.Size([N, M, 1])
+    # assert jets.source.continuous.shape == torch.Size([N, M, D0])
+    # assert jets.source.discrete.shape == torch.Size([N, M, D1])
+    # assert jets.source.mask.shape == torch.Size([N, M, 1])
     assert jets.target.continuous.shape == torch.Size([N, M, D0])
     assert jets.target.discrete.shape == torch.Size([N, M, D1])
     assert jets.target.mask.shape == torch.Size([N, M, 1])
@@ -60,16 +60,22 @@ def test_databatch():
     for batch in train_dataloader:
         
         assert isinstance(batch.source, MultiModeState) 
-        assert batch.source.ndim == 3
+        assert batch.source.ndim == 0
         
         assert isinstance(batch.target, MultiModeState) 
         assert batch.target.ndim == 3
 
-        assert batch.source.continuous.shape[0] == config.data.batch_size
-        assert batch.source.continuous.shape[1] == config.data.max_num_particles
-        assert batch.source.continuous.shape[2] == config.data.dim_continuous
-        assert batch.source.discrete.shape[2] == config.data.dim_discrete
-        assert batch.source.mask.shape[2] == 1
+        assert batch.source.continuous == None
+        assert batch.source.continuous == None
+        assert batch.source.continuous == None
+        assert batch.source.discrete == None
+        assert batch.source.mask == None
+
+        # assert batch.source.continuous.shape[0] == config.data.batch_size
+        # assert batch.source.continuous.shape[1] == config.data.max_num_particles
+        # assert batch.source.continuous.shape[2] == config.data.dim_continuous
+        # assert batch.source.discrete.shape[2] == config.data.dim_discrete
+        # assert batch.source.mask.shape[2] == 1
 
         assert batch.target.continuous.shape[0] == config.data.batch_size
         assert batch.target.continuous.shape[1] == config.data.max_num_particles
@@ -87,11 +93,11 @@ def test_databatch():
     )
 
     for batch in predict_dataloader:
-        assert batch.source.continuous.shape[0] == config.data.batch_size
-        assert batch.source.continuous.shape[1] == config.data.max_num_particles
-        assert batch.source.continuous.shape[2] == config.data.dim_continuous
-        assert batch.source.discrete.shape[2] == config.data.dim_discrete
-        assert batch.source.mask.shape[2] == 1
+        # assert batch.source.continuous.shape[0] == config.data.batch_size
+        # assert batch.source.continuous.shape[1] == config.data.max_num_particles
+        # assert batch.source.continuous.shape[2] == config.data.dim_continuous
+        # assert batch.source.discrete.shape[2] == config.data.dim_discrete
+        # assert batch.source.mask.shape[2] == 1
         assert batch.target.continuous.shape[0] == config.data.batch_size
         assert batch.target.continuous.shape[1] == config.data.max_num_particles
         assert batch.target.continuous.shape[2] == config.data.dim_continuous

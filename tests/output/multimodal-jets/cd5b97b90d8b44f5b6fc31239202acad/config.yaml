@@ -23,7 +23,7 @@ data:
   num_jets: 100
   num_workers: 0
   pin_memory: false
-  source_name: GaussNoise
+  source_name: MultiModalNoise
   source_preprocess_continuous: null
   source_preprocess_discrete: tokenize
   source_test_path: null
@@ -64,7 +64,7 @@ model:
   num_timesteps: 10
   sigma: 0.0001
   time_eps: 0.0001
-path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/cbdccdecfa624f7ab647463a23153508
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/cd5b97b90d8b44f5b6fc31239202acad
 trainer:
   gradient_clip_val: 1.0
   max_epochs: 5
