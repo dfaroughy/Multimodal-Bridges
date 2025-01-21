@@ -133,8 +133,10 @@ class JetsGenerativeCallback(Callback):
     def on_predict_start(self, trainer, pl_module):
         self.data_dir = Path(self.config.path) / "data"
         self.metric_dir = Path(self.config.path) / "metrics"
+        self.plots_dir = Path(self.config.path) / "plots"
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.metric_dir, exist_ok=True)
+        os.makedirs(self.plots_dir, exist_ok=True)
 
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
@@ -151,7 +153,7 @@ class JetsGenerativeCallback(Callback):
         if trainer.is_global_zero:
             self._gather_results_global(trainer)
 
-        self._clean_temp_files()
+        # self._clean_temp_files()
 
     def _save_results_local(self, rank):
         random = np.random.randint(0, 1000)
@@ -170,9 +172,9 @@ class JetsGenerativeCallback(Callback):
         prep_continuous = self.config.data.target_preprocess_continuous
         prep_discrete = self.config.data.target_preprocess_discrete
 
-        src_files = sorted(self.data_dir.glob("temp_src*.h5"))
-        gen_files = sorted(self.data_dir.glob("temp_gen*.h5"))
-        test_files = sorted(self.data_dir.glob("temp_test*.h5"))
+        src_files = sorted(self.data_dir.glob("temp_src_*_*.h5"))
+        gen_files = sorted(self.data_dir.glob("temp_gen_*_*.h5"))
+        test_files = sorted(self.data_dir.glob("temp_test_*_*.h5"))
 
         src_states = [MultiModeState.load_from(str(f)) for f in src_files]
         gen_states = [MultiModeState.load_from(str(f)) for f in gen_files]
@@ -395,6 +397,7 @@ class JetsGenerativeCallback(Callback):
         )
         plt.legend(fontsize=10)
         plt.tight_layout()
+        plt.save_to(self.plots_dir / f"{xlabel}.png")
         return fig
 
     def plot_multiplicity(self, state, gen, test, xlabel=None, log=False):
@@ -421,4 +424,5 @@ class JetsGenerativeCallback(Callback):
         )
         plt.legend(fontsize=7)
         plt.tight_layout()
+        plt.save_to(self.plots_dir / f"{xlabel}.png")
         return fig
