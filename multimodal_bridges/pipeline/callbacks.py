@@ -397,7 +397,7 @@ class JetsGenerativeCallback(Callback):
         )
         plt.legend(fontsize=10)
         plt.tight_layout()
-        plt.save_to(self.plots_dir / f"{xlabel}.png")
+        plt.savefig(self.plots_dir / f"{xlabel}.png")
         return fig
 
     def plot_multiplicity(self, state, gen, test, xlabel=None, log=False):
@@ -424,5 +424,5 @@ class JetsGenerativeCallback(Callback):
         )
         plt.legend(fontsize=7)
         plt.tight_layout()
-        plt.save_to(self.plots_dir / f"{xlabel}.png")
+        plt.savefig(self.plots_dir / f"{xlabel}.png")
         return fig
