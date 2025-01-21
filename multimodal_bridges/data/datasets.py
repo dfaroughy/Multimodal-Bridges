@@ -11,18 +11,24 @@ class MultiModalCouplingDataset(Dataset):
         self.attribute = []
 
         # ...source
+        
+        if hasattr(self.data, "source"):
 
-        if hasattr(self.data.source, "continuous"):
-            self.attribute.append("source_continuous")
-            self.source_continuous = self.data.source.continuous
+            if hasattr(self.data.source, "continuous"):
+                self.attribute.append("source_continuous")
+                self.source_continuous = self.data.source.continuous
 
-        if hasattr(self.data.source, "discrete"):
-            self.attribute.append("source_discrete")
-            self.source_discrete = self.data.source.discrete
+            if hasattr(self.data.source, "discrete"):
+                self.attribute.append("source_discrete")
+                self.source_discrete = self.data.source.discrete
 
-        if hasattr(self.data.source, "mask"):
-            self.attribute.append("source_mask")
-            self.source_mask = self.data.source.mask
+            if hasattr(self.data.source, "mask"):
+                self.attribute.append("source_mask")
+                self.source_mask = self.data.source.mask
+        else:
+            self.source_continuous = None
+            self.source_discrete = None
+            self.source_mask = None
 
         # ...target
 

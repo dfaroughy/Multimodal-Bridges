@@ -1,7 +1,8 @@
-import torch
-import h5py
 from dataclasses import dataclass
 from typing import List
+
+import h5py
+import torch
 
 """ Data classes for multi-modal states and data couplings. 
 """
@@ -65,8 +66,34 @@ class MultiModeState:
             return len(getattr(self, self.available_modes()[-1]))
         return 0
 
+    @classmethod
+    def load_from(cls, path: str) -> "MultiModeState":
+
+        time, continuous, discrete, mask = None, None, None, None
+        
+        with h5py.File(path, "r") as f:
+            if "time" in f:
+                time = torch.from_numpy(f["time"][:])
+            if "continuous" in f:
+                continuous = torch.from_numpy(f["continuous"][:])
+            if "discrete" in f:
+                discrete = torch.from_numpy(f["discrete"][:])
+            if "mask" in f:
+                mask = torch.from_numpy(f["mask"][:])
+
+        return cls(time, continuous, discrete, mask)
+
+    @classmethod
+    def sample_from(cls, distribution, shape, device=None) -> "MultiModeState":
+        time, continuous, discrete, mask = distribution.sample(shape)
+        state = cls(time, continuous, discrete, mask)
+        if device:
+            return state.to(device)
+        return state
+
     @staticmethod
     def cat(states: List["MultiModeState"], dim=0) -> "MultiModeState":
+        
         def cat_attr(attr_name):
             attrs = [getattr(s, attr_name, None) for s in states]
             if all(a is None for a in attrs):
@@ -99,23 +126,6 @@ class MultiModeState:
             for mode in self.available_modes():
                 f.create_dataset(mode, data=getattr(self, mode))
             f.create_dataset("mask", data=self.mask)
-
-    @classmethod
-    def load_from(cls, path: str) -> "MultiModeState":
-
-        time, continuous, discrete, mask = None, None, None, None
-        
-        with h5py.File(path, "r") as f:
-            if "time" in f:
-                time = torch.from_numpy(f["time"][:])
-            if "continuous" in f:
-                continuous = torch.from_numpy(f["continuous"][:])
-            if "discrete" in f:
-                discrete = torch.from_numpy(f["discrete"][:])
-            if "mask" in f:
-                mask = torch.from_numpy(f["mask"][:])
-
-        return cls(time, continuous, discrete, mask)
 
     def _apply_fn(self, func):
         """apply transformation function to all attributes."""
@@ -153,3 +163,10 @@ class DataCoupling:
         if self.context:
             return True
         return False
+
+    @property
+    def has_source(self):
+        if self.source:
+            return True
+        return False
+        

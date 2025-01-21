@@ -93,7 +93,7 @@ class CheckpointsConfig:
     filename: str = "best"
     save_last: bool = True
 
-
+@dataclass
 class ExperimentConfigs:
     path: str = None
     data: DataConfig = field(default_factory=DataConfig)

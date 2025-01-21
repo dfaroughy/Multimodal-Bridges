@@ -5,7 +5,6 @@ import vector
 import uproot
 import h5py
 from sklearn.preprocessing import OneHotEncoder
-from torch.distributions.categorical import Categorical
 from torch.nn import functional as F
 
 vector.register_awkward()
@@ -212,41 +211,6 @@ def extract_aoj_features(
         data_pt_sorted[..., 3:-1],
         data_pt_sorted[..., -1].unsqueeze(-1).long(),
     )
-
-
-def sample_noise(num_jets=100_000, max_num_particles=128):
-    continuous = torch.randn((num_jets, max_num_particles, 3))
-    flavor = np.random.choice(
-        [0, 1, 2, 3, 4], size=(num_jets, max_num_particles), p=[0.2, 0.2, 0.2, 0.2, 0.2]
-    )
-    charge = np.random.choice([-1, 1], size=(num_jets, max_num_particles))
-    charge[flavor == 0] = charge[flavor == 1] = 0
-    flavor = F.one_hot(torch.tensor(flavor), num_classes=5)
-    charge = torch.tensor(charge).unsqueeze(-1)
-    discrete = torch.cat([flavor, charge], dim=-1).long()
-    return continuous, discrete
-
-
-def sample_masks(
-    multiplicity_dist=None, num_jets=100_000, min_num_particles=0, max_num_particles=128
-):
-    """Sample masks from empirical multiplicity distribution `hist`."""
-
-    if multiplicity_dist is None:
-        return torch.ones((num_jets, max_num_particles, 1)).long()
-    elif min_num_particles == max_num_particles:
-        return torch.ones((num_jets, max_num_particles, 1)).long()
-    else:
-        hist_values, _ = np.histogram(
-            multiplicity_dist, bins=np.arange(0, max_num_particles + 2, 1), density=True
-        )
-        probs = torch.tensor(hist_values, dtype=torch.float)
-        cat = Categorical(probs)
-        multiplicity = cat.sample((num_jets,))
-        masks = torch.zeros((num_jets, max_num_particles))
-        for i, n in enumerate(multiplicity):
-            masks[i, :n] = 1
-        return masks.unsqueeze(-1).long()
 
 
 def map_basis_to_tokens(tensor):

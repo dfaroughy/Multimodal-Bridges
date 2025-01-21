@@ -3,6 +3,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import numpy as np
 import h5py
+from torch.distributions.categorical import Categorical
 
 plt.rcParams["mathtext.fontset"] = "cm"
 plt.rcParams["figure.autolayout"] = False
@@ -19,6 +20,7 @@ from data.particle_clouds.utils import (
 
 
 class ParticleClouds:
+
     def __init__(
         self,
         dataset="JetClass",
@@ -46,7 +48,7 @@ class ParticleClouds:
                 self.discrete = dataset.discrete
             self.mask = dataset.mask
 
-        elif "JetClass" in dataset:
+        elif "jetclass" in dataset:
             assert path is not None, "Specify the path to the JetClass dataset"
             self.continuous, self.discrete, self.mask = extract_jetclass_features(
                 path,
@@ -63,17 +65,6 @@ class ParticleClouds:
                 min_num_particles,
                 max_num_particles,
             )
-
-        elif "Noise" in dataset:
-            self.continuous, self.discrete = sample_noise(num_jets, max_num_particles)
-            self.mask = sample_masks(
-                multiplicity_dist,
-                num_jets,
-                min_num_particles,
-                max_num_particles,
-            )
-            self.continuous *= self.mask
-            self.discrete *= self.mask
 
         # ... useful attributes:
 
@@ -178,3 +169,67 @@ class ParticleClouds:
         ax.set_ylabel(ylabel, fontsize=fontsize)
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
+
+
+
+class MultiModalNoise:
+    
+    def __init__(self, config):
+        self.config = config
+
+    def sample(self, shape):
+        """
+        Sample multi-modal random source:
+        - time: None
+        - continuous: N(0, 1) for each particle feature
+        - discrete: random token in [0, vocab_size) for each particle
+        - mask: number of active particles from a categorical distribution with `categorial_probs`
+
+        """
+
+        num_jets, max_num_particles = shape
+        vocab_size = self.config.data.vocab_size
+
+        if self.config.data.target_name == "AspenOpenJets":
+            categorial_probs = [
+            0.0, 0.0, 2.3e-05, 4.2e-05, 4.5e-05, 7.6e-05, 0.000126, 0.000139, 0.000295, 
+            0.000411, 0.000711, 0.001076, 0.001498, 0.002125, 0.002676, 0.003562, 0.004589, 
+            0.005568, 0.006726, 0.00745, 0.008848, 0.009891, 0.010794, 0.011616, 0.012913, 
+            0.014028, 0.014461, 0.01527, 0.016087, 0.017046, 0.017625, 0.018257, 0.018313, 
+            0.018739, 0.019904, 0.01987, 0.020017, 0.020573, 0.020321, 0.020915, 0.021078, 
+            0.021068, 0.021238, 0.021362, 0.021184, 0.020843, 0.021087, 0.020803, 0.020675, 
+            0.02012, 0.019687, 0.019767, 0.019179, 0.018818, 0.018088, 0.017954, 0.017493, 
+            0.01666, 0.015898, 0.015648, 0.015328, 0.014447, 0.013704, 0.0133, 0.012902, 
+            0.011917, 0.011454, 0.010991, 0.010148, 0.009768, 0.009205, 0.008871, 0.008108, 
+            0.007705, 0.007257, 0.006812, 0.006552, 0.005785, 0.005534, 0.004937, 0.004508, 
+            0.004359, 0.003957, 0.003599, 0.003272, 0.003055, 0.002747, 0.002811, 0.002423, 
+            0.002255, 0.001991, 0.001862, 0.001687, 0.001502, 0.001489, 0.001202, 0.001192, 
+            0.001114, 0.0009, 0.000844, 0.000768, 0.000693, 0.000636, 0.000547, 0.000447, 
+            0.000453, 0.000381, 0.000422, 0.000332, 0.000267, 0.000254, 0.000234, 0.000208, 
+            0.000167, 0.000152, 0.000135, 0.000108, 9.5e-05, 0.000117, 9.9e-05, 9.4e-05, 
+            8e-05, 5e-05, 6.3e-05, 2.7e-05, 3.2e-05, 4.9e-05, 4.3e-05,
+            ]
+
+        elif self.config.data.target.name == "JetClass":
+            # TODO
+            pass
+
+        if categorial_probs:
+            cat = Categorical(torch.tensor(categorial_probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        time = None
+        continuous = torch.randn((num_jets, max_num_particles, 3)) * mask
+
+        if vocab_size > 0:
+            discrete = torch.randint(0, vocab_size, (num_jets, max_num_particles, 1)) * mask
+        else:
+            discrete = None
+
+        return time, continuous, discrete, mask

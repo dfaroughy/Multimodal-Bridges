@@ -35,6 +35,7 @@ class JetDataModule(L.LightningDataModule):
         self.pin_memory = config.data.pin_memory
         self.split_ratios = config.data.split_ratios
         self.metadata_path = metadata_path
+        self.data_to_data_bridge = bool(config.data.source_train_path) 
         self._get_metadata()
 
     #####################
@@ -81,7 +82,9 @@ class JetDataModule(L.LightningDataModule):
         )
 
     def _prepare_fit_datasets(self, preprocess=True):
-        """Prepare source and target datasets based on configuration."""
+        """Prepare source and target datasets based on configuration.
+        """
+        
         self.target = ParticleClouds(
             dataset=self.config.data.target_name,
             path=self.config.data.target_train_path,
@@ -89,30 +92,36 @@ class JetDataModule(L.LightningDataModule):
             min_num_particles=self.config.data.min_num_particles,
             max_num_particles=self.config.data.max_num_particles,
         )
-        self.source = ParticleClouds(
-            dataset=self.config.data.source_name,
-            path=self.config.data.source_train_path,
-            num_jets=self.config.data.num_jets,
-            min_num_particles=self.config.data.min_num_particles,
-            max_num_particles=self.config.data.max_num_particles,
-            multiplicity_dist=self.target.multiplicity
-            if "Noise" in self.config.data.source_name
-            else None,
-        )
 
-        self.metadata["source_data_stats"] = self.source.get_data_stats()
         self.metadata["target_data_stats"] = self.target.get_data_stats()
-        self._store_metadata()
 
+        if self.data_to_data_bridge:
+
+            self.source = ParticleClouds(
+                dataset=self.config.data.source_name,
+                path=self.config.data.source_train_path,
+                num_jets=self.config.data.num_jets,
+                min_num_particles=self.config.data.min_num_particles,
+                max_num_particles=self.config.data.max_num_particles,
+            )
+
+            self.metadata["source_data_stats"] = self.source.get_data_stats()
+        
+
+        self._store_metadata()
         self._clear_unavailable_modes()  # remove the data mode that is not needed
 
         if preprocess:
             log.info("Preprocessing source/target fit datasets...")
-            self.source.preprocess(
-                continuous=self.config.data.source_preprocess_continuous,
-                discrete=self.config.data.source_preprocess_discrete,
-                **self.metadata["source_data_stats"],
-            )
+
+            if self.data_to_data_bridge:
+
+                self.source.preprocess(
+                    continuous=self.config.data.source_preprocess_continuous,
+                    discrete=self.config.data.source_preprocess_discrete,
+                    **self.metadata["source_data_stats"],
+                )
+
             self.target.preprocess(
                 continuous=self.config.data.target_preprocess_continuous,
                 discrete=self.config.data.target_preprocess_discrete,
@@ -120,7 +129,9 @@ class JetDataModule(L.LightningDataModule):
             )
 
     def _prepare_predict_datasets(self, preprocess=True):
-        """Prepare source and target datasets based on configuration."""
+        """Prepare source and target datasets based on configuration.
+        """
+
         self.target = ParticleClouds(
             dataset=self.config.data.target_name,
             path=self.config.data.target_test_path,
@@ -128,22 +139,24 @@ class JetDataModule(L.LightningDataModule):
             min_num_particles=self.config.data.min_num_particles,
             max_num_particles=self.config.data.max_num_particles,
         )
-        self.source = ParticleClouds(
-            dataset=self.config.data.source_name,
-            path=self.config.data.source_test_path,
-            num_jets=self.config.data.num_jets,
-            min_num_particles=self.config.data.min_num_particles,
-            max_num_particles=self.config.data.max_num_particles,
-            multiplicity_dist=self.target.multiplicity
-            if "Noise" in self.config.data.source_name
-            else None,
-        )
+
+        if self.data_to_data_bridge:
+
+            self.source = ParticleClouds(
+                dataset=self.config.data.source_name,
+                path=self.config.data.source_test_path,
+                num_jets=self.config.data.num_jets,
+                min_num_particles=self.config.data.min_num_particles,
+                max_num_particles=self.config.data.max_num_particles,
+            )
 
         self._clear_unavailable_modes()  # remove the data mode that is not needed
 
-        if preprocess:
+        if preprocess and self.data_to_data_bridge:
+            
             self.metadata["source_data_stats"] = self.source.get_data_stats()
             log.info("Preprocessing source predict datasets...")
+            
             self.source.preprocess(
                 continuous=self.config.data.source_preprocess_continuous,
                 discrete=self.config.data.source_preprocess_discrete,
@@ -152,10 +165,12 @@ class JetDataModule(L.LightningDataModule):
 
     def _clear_unavailable_modes(self):
         if self.config.data.modality == "continuous":
-            del self.source.discrete
+            if hasattr(self, "source"):
+                del self.source.discrete
             del self.target.discrete
         elif self.config.data.modality == "discrete":
-            del self.source.continuous
+            if hasattr(self, "source"):
+                del self.source.continuous
             del self.target.continuous
         elif self.config.data.modality == "multi-modal":
             pass

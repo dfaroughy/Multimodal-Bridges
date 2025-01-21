@@ -4,6 +4,7 @@ import lightning as L
 from typing import List, Tuple, Dict, Union
 
 from pipeline.configs import ExperimentConfigs
+from pipeline.registry import registered_noise_sources as NoiseSource
 from pipeline.registry import registered_models as Encoder
 from pipeline.registry import registered_bridges as Bridge
 from pipeline.registry import registered_optimizers as Optimizer
@@ -33,6 +34,12 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)
         self.save_hyperparameters()
+
+        # if no path to source data provided, sample on th fly from
+        # a registered noise source:
+
+        if config.data.source_train_path is None:
+            self.source_distribution = NoiseSource[config.data.source_name](config)
 
     def forward(self, state: MultiModeState, batch: DataCoupling) -> MultiModeState:
         h_local, h_global = self.embedder(state, batch)
@@ -83,6 +90,14 @@ class MultiModalBridgeMatching(L.LightningModule):
         self, batch: DataCoupling, batch_idx
     ) -> Tuple[MultiModeState, MultiModeState, MultiModeState]:
         """generate target data from source by solving EOMs"""
+        
+        if not batch.has_source:
+            batch.source = MultiModeState.sample_from(
+                distribution=self.source_distribution,
+                shape=batch.target.shape,
+                device=self.device,
+            )
+            
         source_state = MultiModeState(
             None, batch.source.continuous, batch.source.discrete, batch.source.mask
         )
@@ -141,9 +156,22 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         continuous, discrete = None, None
 
+        # sample time:
+
         eps = self.config.model.time_eps  # min time resolution
         t = eps + (1 - eps) * torch.rand(len(batch), device=self.device)
         time = self.reshape_time_dim_like(t, batch)
+
+        # sample source data if necessary:
+
+        if not batch.has_source:
+            batch.source = MultiModeState.sample_from(
+                distribution=self.source_distribution,
+                shape=batch.target.shape,
+                device=self.device,
+            )
+
+        # sample bridge paths:
 
         if batch.target.has_continuous:
             continuous = self.bridge_continuous.sample(time, batch)
@@ -152,6 +180,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             discrete = self.bridge_discrete.sample(time, batch)
 
         mask = batch.target.mask
+
         return MultiModeState(time, continuous, discrete, mask)
 
     def simulate_dynamics(
