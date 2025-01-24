@@ -4,7 +4,7 @@ import h5py
 import os
 import urllib.request
 import json
-
+from pathlib import Path
 from pipeline.helpers import SimpleLogger as log
 from tensorclass import TensorMultiModal
 
@@ -25,9 +25,10 @@ class AspenOpenJets:
         self.data_dir = data_dir
         self.data_files = data_files
 
-        metadata = self._load_metadata(data_dir)
-        self.mean = torch.tensor(metadata["continuous_mean"])
-        self.std = torch.tensor(metadata["continuous_std"])
+        if os.path.exists(Path(data_dir) / 'metadata.json'):
+            metadata = self._load_metadata(data_dir)
+            self.mean = torch.tensor(metadata["continuous_mean"])
+            self.std = torch.tensor(metadata["continuous_std"])
 
     def __call__(
         self,
