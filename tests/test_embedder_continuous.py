@@ -3,8 +3,10 @@ import pytest
 import torch
 from pipeline.helpers import SimpleLogger as log
 from pipeline.configs import ExperimentConfigs
-from data.dataclasses import MultiModeState, DataCoupling
-from encoders.embedder import MultiModalParticleCloudEmbedder
+
+from tensorclass import TensorMultiModal
+from datamodules.datasets import DataCoupling
+from encoders.embedder import MultiModalEmbedder
 
 log.warnings_off()
 
@@ -14,15 +16,15 @@ CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model_continuous.yaml")
 
 @pytest.fixture
 def dummy_batch():
-    source = MultiModeState(
+    source = TensorMultiModal(
         continuous=torch.randn(100, 128, 3),
         mask=torch.ones(100, 128, 1),
     )
-    target = MultiModeState(
+    target = TensorMultiModal(
         continuous=torch.randn(100, 128, 3),
         mask=torch.ones(100, 128, 1),
     )
-    context = MultiModeState(
+    context = TensorMultiModal(
         continuous=torch.randn(100, 5),
         discrete=torch.randint(0, 7, (100, 4)),
     )
@@ -30,7 +32,7 @@ def dummy_batch():
 
 @pytest.fixture
 def dummy_state():
-    return MultiModeState(
+    return TensorMultiModal(
         time=torch.randn(100, 1, 1),
         continuous=torch.randn(100, 128, 3),
         mask=torch.ones(100, 128, 1),
@@ -39,7 +41,7 @@ def dummy_state():
 
 def test_continuous_embedder(dummy_batch, dummy_state):
     config = ExperimentConfigs(CONFIG_PATH)
-    embedder = MultiModalParticleCloudEmbedder(config)
+    embedder = MultiModalEmbedder(config)
     state_loc, state_glob = embedder(dummy_state, dummy_batch)
 
     assert state_loc.time.shape == (

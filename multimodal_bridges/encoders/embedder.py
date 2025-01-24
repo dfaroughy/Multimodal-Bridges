@@ -3,7 +3,7 @@ import math
 from torch import nn
 from typing import Tuple
 
-from data.datasets import MultiModeState
+from  tensorclass import TensorMultiModal
 from pipeline.helpers import SimpleLogger as log
 
 
@@ -51,7 +51,7 @@ class EmbedMode(nn.Module):
         return self.embedding(x)
 
 
-class MultiModalParticleCloudEmbedder(nn.Module):
+class MultiModalEmbedder(nn.Module):
     """
     Module that embeds multimodal point cloud data into latent vector spaces for downstream tasks.
     Includes non-markovian source augmentation (optional) as in https://arxiv.org/abs/2311.06978
@@ -68,7 +68,7 @@ class MultiModalParticleCloudEmbedder(nn.Module):
     """
 
     def __init__(self, config):
-        super(MultiModalParticleCloudEmbedder, self).__init__()
+        super(MultiModalEmbedder, self).__init__()
 
         self.augmentation = config.encoder.data_augmentation
         log.info("Augmenting local state with source data", self.augmentation)
@@ -144,7 +144,7 @@ class MultiModalParticleCloudEmbedder(nn.Module):
             )
 
     def forward(
-        self, state: MultiModeState, batch: MultiModeState) -> Tuple[MultiModeState, MultiModeState]:
+        self, state: TensorMultiModal, batch: TensorMultiModal) -> Tuple[TensorMultiModal, TensorMultiModal]:
     
         continuous_feats, discrete_feats = None, None
         continuous_context, discrete_context = None, None
@@ -170,7 +170,7 @@ class MultiModalParticleCloudEmbedder(nn.Module):
             if hasattr(self, "embedding_discrete"):
                 discrete_feats = self.embedding_discrete(discrete_feats).view(*reshape)
 
-        state_loc = MultiModeState(time, continuous_feats, discrete_feats, state.mask)
+        state_loc = TensorMultiModal(time, continuous_feats, discrete_feats, state.mask)
         state_loc.apply_mask()
 
         # Embed context
@@ -188,7 +188,7 @@ class MultiModalParticleCloudEmbedder(nn.Module):
                 if hasattr(self, "embedding_context_discrete"):
                     discrete_context = self.embedding_context_discrete(discrete_context).view(reshape)
 
-        state_glob = MultiModeState(time_context, continuous_context, discrete_context, None)
+        state_glob = TensorMultiModal(time_context, continuous_context, discrete_context, None)
 
         return state_loc, state_glob
 

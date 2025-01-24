@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 import torch.nn.utils.weight_norm as weight_norm
 
-from data.datasets import MultiModeState
+from tensorclass import TensorMultiModal
 
 
 class MultiModalEPiC(nn.Module):
@@ -41,8 +41,8 @@ class MultiModalEPiC(nn.Module):
         )
 
     def forward(
-        self, state_local: MultiModeState, state_global: MultiModeState
-    ) -> MultiModeState:
+        self, state_local: TensorMultiModal, state_global: TensorMultiModal
+    ) -> TensorMultiModal:
 
         local_modes = [getattr(state_local, mode) for mode in state_local.available_modes()]
         global_modes = [getattr(state_global, mode) for mode in state_global.available_modes()]
@@ -55,7 +55,7 @@ class MultiModalEPiC(nn.Module):
         h = self.epic(local_cat, global_cat, mask)
         head_continuous = h[..., : self.config.data.dim_continuous] if state_local.has_continuous else None
         head_discrete = h[..., self.config.data.dim_continuous :] if state_local.has_discrete else None
-        return MultiModeState(None, head_continuous, head_discrete, mask)
+        return TensorMultiModal(None, head_continuous, head_discrete, mask)
 
 
 class EPiCNetwork(nn.Module):

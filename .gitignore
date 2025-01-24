@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 experiments/
+data/
 results/
 __pycache__/
 __init__.py

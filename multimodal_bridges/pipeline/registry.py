@@ -1,12 +1,17 @@
 import torch
-from data.particle_clouds.particles import MultiModalNoise
+from datamodules.particle_clouds.aoj import AspenOpenJets
+from distributions.noise import MultiModalNoise
 from model.bridges import UniformLinearFlow, SchrodingerBridge, TelegraphBridge
 from encoders.epic import MultiModalEPiC
 from encoders.particle_transformer import MultiModalParticleTransformer
 
-registered_noise_sources = {
-    "MultiModalNoise": MultiModalNoise,
+registered_datasets = {
+    "AspenOpenJets": AspenOpenJets,
     }
+
+registered_distributions = {
+    "MultiModalNoise": MultiModalNoise,
+}
 
 registered_bridges = {
     "UniformLinearFlow": UniformLinearFlow,

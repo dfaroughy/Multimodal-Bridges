@@ -19,21 +19,13 @@ data:
   batch_size: 1024
   split_ratios: [0.7, 0.3]  # train / val / test
   target_name: AspenOpenJets
+  target_path: /home/df630/Multimodal-Bridges/data/aoj/
+  target_train_files: RunG_batch1.h5
+  target_test_files: RunG_batch0.h5
   source_name: MultiModalNoise
-  target_train_path: 
-      - /home/df630/CMB/data/AOJ/2016H_job0.h5
-      - /home/df630/CMB/data/AOJ/2016H_job1.h5
-      - /home/df630/CMB/data/AOJ/2016H_job2.h5
-      - /home/df630/CMB/data/AOJ/2016H_job3.h5 
-      - /home/df630/CMB/data/AOJ/2016H_job4.h5
-      - /home/df630/CMB/data/AOJ/2016H_job5.h5
-      - /home/df630/CMB/data/AOJ/2016H_job6.h5
-      - /home/df630/CMB/data/AOJ/2016H_job7.h5
-  target_test_path: 
-      - /home/df630/CMB/data/AOJ/2016H_job8.h5
-      - /home/df630/CMB/data/AOJ/2016H_job9.h5
-  target_preprocess_continuous: standardize
-  target_preprocess_discrete: tokenize
+  source_path: null
+  source_train_files: null
+  source_test_files: null
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 10_000

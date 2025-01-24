@@ -4,14 +4,15 @@ import lightning as L
 from typing import List, Tuple, Dict, Union
 
 from pipeline.configs import ExperimentConfigs
-from pipeline.registry import registered_noise_sources as NoiseSource
+from pipeline.registry import registered_distributions as Distribution
 from pipeline.registry import registered_models as Encoder
 from pipeline.registry import registered_bridges as Bridge
 from pipeline.registry import registered_optimizers as Optimizer
 from pipeline.registry import registered_schedulers as Scheduler
 
-from data.dataclasses import MultiModeState, DataCoupling
-from encoders.embedder import MultiModalParticleCloudEmbedder
+from tensorclass import TensorMultiModal
+from datamodules.datasets import DataCoupling
+from encoders.embedder import MultiModalEmbedder
 
 
 class MultiModalBridgeMatching(L.LightningModule):
@@ -20,7 +21,7 @@ class MultiModalBridgeMatching(L.LightningModule):
     def __init__(self, config: ExperimentConfigs):
         super().__init__()
         self.config = config
-        self.embedder = MultiModalParticleCloudEmbedder(config)
+        self.embedder = MultiModalEmbedder(config)
         self.encoder = Encoder[config.encoder.name](config)
 
         if config.data.modality in ["continuous", "multi-modal"]:
@@ -35,13 +36,15 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)
         self.save_hyperparameters()
 
-        # if no path to source data provided, sample on th fly from
-        # a registered noise source:
+        # if source/target data not provided, sample from provided distributions:
 
-        if config.data.source_train_path is None:
-            self.source_distribution = NoiseSource[config.data.source_name](config)
+        if not config.data.source_path:
+            self.sample_source = Distribution[config.data.source_name](config)
 
-    def forward(self, state: MultiModeState, batch: DataCoupling) -> MultiModeState:
+        if not config.data.target_path:
+            self.sample_target = Distribution[config.data.target_name](config)
+
+    def forward(self, state: TensorMultiModal, batch: DataCoupling) -> TensorMultiModal:
         h_local, h_global = self.embedder(state, batch)
 
         return self.encoder(h_local, h_global)
@@ -88,21 +91,24 @@ class MultiModalBridgeMatching(L.LightningModule):
 
     def predict_step(
         self, batch: DataCoupling, batch_idx
-    ) -> Tuple[MultiModeState, MultiModeState, MultiModeState]:
+    ) -> Tuple[TensorMultiModal, TensorMultiModal, TensorMultiModal]:
         """generate target data from source by solving EOMs"""
-        
+
         if not batch.has_source:
-            batch.source = MultiModeState.sample_from(
-                distribution=self.source_distribution,
-                shape=batch.target.shape,
-                device=self.device,
+            batch.source = self.sample_source(
+                shape=batch.target.shape, device=self.device
             )
-            
-        source_state = MultiModeState(
+
+        if not batch.has_target:
+            batch.target = self.sample_target(
+                shape=batch.target.shape, device=self.device
+            )
+
+        source_state = TensorMultiModal(
             None, batch.source.continuous, batch.source.discrete, batch.source.mask
         )
 
-        target_state = MultiModeState(
+        target_state = TensorMultiModal(
             None, batch.target.continuous, batch.target.discrete, batch.target.mask
         )
 
@@ -124,7 +130,7 @@ class MultiModalBridgeMatching(L.LightningModule):
     # ...Model functions
 
     def loss_fn(
-        self, heads: MultiModeState, state: MultiModeState, batch: DataCoupling
+        self, heads: TensorMultiModal, state: TensorMultiModal, batch: DataCoupling
     ) -> torch.Tensor:
         loss_continuous = torch.tensor(0.0, device=self.device)
         loss_discrete = torch.tensor(0.0, device=self.device)
@@ -151,7 +157,7 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         return loss_continuous, loss_discrete
 
-    def sample_bridges(self, batch: DataCoupling) -> MultiModeState:
+    def sample_bridges(self, batch: DataCoupling) -> TensorMultiModal:
         """sample stochastic bridges"""
 
         continuous, discrete = None, None
@@ -162,13 +168,16 @@ class MultiModalBridgeMatching(L.LightningModule):
         t = eps + (1 - eps) * torch.rand(len(batch), device=self.device)
         time = self.reshape_time_dim_like(t, batch)
 
-        # sample source data if necessary:
+        # sample source/target data if necessary:
 
         if not batch.has_source:
-            batch.source = MultiModeState.sample_from(
-                distribution=self.source_distribution,
-                shape=batch.target.shape,
-                device=self.device,
+            batch.source = self.sample_source(
+                shape=batch.target.shape, device=self.device
+            )
+
+        if not batch.has_target:
+            batch.target = self.sample_target(
+                shape=batch.target.shape, device=self.device
             )
 
         # sample bridge paths:
@@ -181,11 +190,11 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         mask = batch.target.mask
 
-        return MultiModeState(time, continuous, discrete, mask)
+        return TensorMultiModal(time, continuous, discrete, mask)
 
     def simulate_dynamics(
-        self, state: MultiModeState, batch: DataCoupling
-    ) -> MultiModeState:
+        self, state: TensorMultiModal, batch: DataCoupling
+    ) -> TensorMultiModal:
         """generate target data from source input using trained dynamics
         returns the final state of the bridge at the end of the time interval
         """
@@ -208,7 +217,7 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         return state.detach().cpu()
 
-    def reshape_time_dim_like(self, t, state: Union[MultiModeState, DataCoupling]):
+    def reshape_time_dim_like(self, t, state: Union[TensorMultiModal, DataCoupling]):
         if isinstance(t, (float, int)):
             return t
         else:

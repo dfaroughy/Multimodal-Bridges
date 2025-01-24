@@ -3,7 +3,8 @@ import pytest
 import torch
 from pipeline.helpers import SimpleLogger as log
 from pipeline.configs import ExperimentConfigs
-from data.dataclasses import MultiModeState, DataCoupling
+from datamodules.datasets import DataCoupling
+from tensorclass import TensorMultiModal
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
 
 log.warnings_off()
@@ -13,13 +14,13 @@ CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
 
 @pytest.fixture
 def dummy_batch():
-    source = MultiModeState()
-    target = MultiModeState(
+    source = TensorMultiModal()
+    target = TensorMultiModal(
         continuous=torch.randn(100, 128, 3),
         discrete=torch.randint(0, 8, (100, 128, 1)),
         mask=torch.ones(100, 128, 1),
     )
-    context = MultiModeState(
+    context = TensorMultiModal(
         continuous=torch.randn(100, 5),
         discrete=torch.randint(0, 7, (100, 4)),
     )
@@ -39,17 +40,17 @@ def test_multimodal_bridge_matching(dummy_batch):
 
 if __name__ == "__main__":
 
-    source = MultiModeState(
+    source = TensorMultiModal(
         continuous=torch.randn(100, 128, 3),
         discrete=torch.randint(0, 8, (100, 128, 1)),
         mask=torch.ones(100, 128, 1),
     )
-    target = MultiModeState(
+    target = TensorMultiModal(
         continuous=torch.randn(100, 128, 3),
         discrete=torch.randint(0, 8, (100, 128, 1)),
         mask=torch.ones(100, 128, 1),
     )
-    context = MultiModeState(
+    context = TensorMultiModal(
         continuous=torch.randn(100, 5),
         discrete=torch.randint(0, 7, (100, 4)),
     )

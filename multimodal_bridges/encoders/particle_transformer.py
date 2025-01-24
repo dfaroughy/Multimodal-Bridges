@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from data.datasets import MultiModeState
+from tensorclass import TensorMultiModal
 
 
 class MultiModalParticleTransformer(nn.Module):
@@ -122,8 +122,8 @@ class MultiModalParticleTransformer(nn.Module):
         )
 
     def forward(
-        self, state_local: MultiModeState, state_global: MultiModeState
-    ) -> MultiModeState:
+        self, state_local: TensorMultiModal, state_global: TensorMultiModal
+    ) -> TensorMultiModal:
         time = state_local.time
         continuous = state_local.continuous
         discrete = state_local.discrete
@@ -149,7 +149,7 @@ class MultiModalParticleTransformer(nn.Module):
         head_continuous = self.cross_attn_continuous_1(h, f, time, mask)
         head_discrete = self.cross_attn_discrete_1(f, h, time, mask)
 
-        return MultiModeState(
+        return TensorMultiModal(
             continuous=head_continuous, discrete=head_discrete, mask=mask
         )
 

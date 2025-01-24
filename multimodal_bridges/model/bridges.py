@@ -3,7 +3,8 @@ from torch.nn.functional import softmax
 from torch.distributions import Categorical
 from dataclasses import dataclass
 
-from data.dataclasses import MultiModeState, DataCoupling
+from tensorclass import TensorMultiModal
+from datamodules.datasets import DataCoupling
 
 
 class UniformLinearFlow:
@@ -28,7 +29,7 @@ class UniformLinearFlow:
         std = self.sigma
         return xt + std * z
 
-    def drift(self, state: MultiModeState, batch: DataCoupling):
+    def drift(self, state: TensorMultiModal, batch: DataCoupling):
         x0 = batch.source.continuous
         x1 = batch.target.continuous
         xt = state.continuous
@@ -37,7 +38,7 @@ class UniformLinearFlow:
         C = -1.0
         return A * xt + B * x1 + C * x0
 
-    def diffusion(self, state: MultiModeState):
+    def diffusion(self, state: TensorMultiModal):
         return 0.0
 
     def forward_step(self, state, heads, delta_t):
@@ -68,7 +69,7 @@ class SchrodingerBridge:
         std = self.sigma * torch.sqrt(t * (1.0 - t))
         return x + std * z
 
-    def drift(self, state: MultiModeState, batch: DataCoupling):
+    def drift(self, state: TensorMultiModal, batch: DataCoupling):
         x0 = batch.source.continuous
         x1 = batch.target.continuous
         xt = state.continuous
@@ -78,11 +79,11 @@ class SchrodingerBridge:
         C = -1 * (1 - t) ** 2 / (t * (1 - t))
         return A * xt + B * x1 + C * x0
 
-    def diffusion(self, state: MultiModeState):
+    def diffusion(self, state: TensorMultiModal):
         t = state.time
         return self.sigma * torch.sqrt(t * (1.0 - t))
 
-    def forward_step(self, state: MultiModeState, heads: MultiModeState, delta_t):
+    def forward_step(self, state: TensorMultiModal, heads: TensorMultiModal, delta_t):
         """Euler-Maruyama step for SDE solver"""
         diffusion = self.diffusion(delta_t)
         delta_w = torch.randn_like(state.continuous)
@@ -113,7 +114,7 @@ class TelegraphBridge:
             drwan_state = drwan_state.unsqueeze(-1)
         return drwan_state
 
-    def rate(self, state: MultiModeState, heads: MultiModeState):
+    def rate(self, state: TensorMultiModal, heads: TensorMultiModal):
         """t: (b, 1) time tensor
         k: (b, n, 1) current state tensor
         logits: (b, n, vocab_size) logits tensor

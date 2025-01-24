@@ -19,10 +19,13 @@ data:
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
   target_name: AspenOpenJets
+  target_path: /home/df630/Multimodal-Bridges/tests/resources/
+  target_train_files: 2016H_job0_mini.h5
+  target_test_files: 2016H_job0_mini.h5
   source_name: MultiModalNoise
-  target_train_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
-  target_test_path: /home/df630/Multimodal-Bridges/tests/resources/2016H_job0_mini.h5
-  target_preprocess_continuous: standardize
+  source_path: null
+  source_train_files: null
+  source_test_files: null
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
