@@ -50,10 +50,10 @@ encoder:
   skip_connection: true
   dropout: 0.2
   embed_type_time: SinusoidalPositionalEncoding
-  embed_type_continuous: Linear
+  # embed_type_continuous: Linear
   embed_type_discrete: LookupTable
   dim_emb_time: 32
-  dim_emb_continuous: 16
+  # dim_emb_continuous: 16
   dim_emb_discrete: 16
 
 comet_logger:

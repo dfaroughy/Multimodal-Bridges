@@ -105,8 +105,10 @@ class ExperimentConfigs:
         self._load_config(config)
 
         # post process:
-        if not self.eoncoder.embed_type_continuous:
-            self.dim_emb_continuous = self.dim_continuous
+
+        if not self.encoder.embed_type_continuous:
+            self.encoder.dim_emb_continuous = self.data.dim_continuous
+
         if not self.encoder.embed_type_context_continuous:
             self.encoder.dim_emb_context_continuous = self.data.dim_context_continuous 
 
