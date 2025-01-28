@@ -1,6 +1,7 @@
 from comet_ml import ExistingExperiment
 from pytorch_lightning.loggers import CometLogger
 import os
+import torch
 from typing import List, Union
 import lightning.pytorch as L
 from lightning.pytorch.callbacks import RichProgressBar
@@ -10,11 +11,8 @@ from lightning.pytorch.utilities import rank_zero_only
 from pipeline.configs import ExperimentConfigs, progress_bar
 from pipeline.helpers import SimpleLogger as log
 from model.multimodal_bridge_matching import MultiModalBridgeMatching
-from pipeline.callbacks import (
-    ModelCheckpointCallback,
-    ExperimentLoggerCallback,
-    JetsGenerativeCallback,
-)
+from pipeline.callbacks_trainer import ModelCheckpointCallback, ExperimentLoggerCallback
+from pipeline.callbacks_generator import JetGeneratorCallback
 
 
 class ExperimentPipeline:
@@ -26,6 +24,7 @@ class ExperimentPipeline:
         self,
         datamodule: L.LightningDataModule,
         config: str = None,
+        transform: str = 'standardize',
         experiment_path: str = None,
         load_ckpt: str = "last.ckpt",
         accelerator: str = "gpu",
@@ -78,8 +77,8 @@ class ExperimentPipeline:
             self.logger = self._setup_logger(new_experiment=False)
 
         self.config.update(self.config_update)
-        self.callbacks = self._setup_callbacks_list()
-        self.datamodule = self._setup_datamodule()
+        self.callbacks = self._setup_callbacks_list(transform=transform)
+        self.datamodule = self._setup_datamodule(transform=transform)
 
     def train(self):
         """
@@ -138,9 +137,9 @@ class ExperimentPipeline:
         """
         Initialize a new CometLogger instance for a new experiment.
         """
-        tags = [self.config.data.modality, f'{self.num_nodes} nodes']
+        tags = [self.config.data.modality, f"{self.num_nodes} nodes"]
         tags += self.tags if isinstance(self.tags, list) else [self.tags]
-        
+
         logger = CometLogger(**self.config.comet_logger.__dict__)
         logger.experiment.log_parameters(self.config.to_dict())
         logger.experiment.add_tags(tags)
@@ -170,12 +169,12 @@ class ExperimentPipeline:
         experiment.log_parameters(self.config.to_dict())
         return CometLogger(**self.config.comet_logger.__dict__)
 
-    def _setup_datamodule(self):
+    def _setup_datamodule(self, transform):
         """
         Prepare the data module for training and validation datasets.
         Saves metadata for later use.
         """
-        data = self.datamodule(config=self.config)
+        data = self.datamodule(config=self.config, transform=transform)
         self.metadata = data.metadata
         return data
 
@@ -185,7 +184,7 @@ class ExperimentPipeline:
         """
         return MultiModalBridgeMatching(self.config)
 
-    def _setup_callbacks_list(self) -> List[L.Callback]:
+    def _setup_callbacks_list(self, transform=None) -> List[L.Callback]:
         """
         Configure and return the necessary callbacks for training.
         """
@@ -193,7 +192,7 @@ class ExperimentPipeline:
         callbacks.append(RichProgressBar(theme=RichProgressBarTheme(**progress_bar)))
         callbacks.append(ModelCheckpointCallback(self.config))
         callbacks.append(ExperimentLoggerCallback(self.config))
-        callbacks.append(JetsGenerativeCallback(self.config))
+        callbacks.append(JetGeneratorCallback(self.config, transform=transform ))
         return callbacks
 
     def _setup_trainer(self) -> L.Trainer:

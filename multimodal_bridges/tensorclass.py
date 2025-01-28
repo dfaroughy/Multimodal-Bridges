@@ -68,33 +68,41 @@ class TensorMultiModal:
         return 0
 
     @classmethod
-    def load_from(cls, path, device=None, transform=None, mean=0.0, std=1.0) -> "TensorMultiModal":
-        time, continuous, discrete, mask = None, None, None, None
+    def load_from(cls, path, device=None, transform=None) -> "TensorMultiModal":
+        """
+        Load tensors from an HDF5 file and optionally apply transformations.
+
+        Args:
+            path (str): Path to the HDF5 file.
+            device (str, optional): Device to move tensors to.
+            transform (callable or dict, optional): A callable function or dictionary of callables 
+                to apply transformations to specific tensors. Keys can be "time", "continuous", 
+                "discrete", or "mask".
+
+        Returns:
+            TensorMultiModal: An instance of the class with loaded and transformed tensors.
+        """
+        tensors = {"time": None, "continuous": None, "discrete": None, "mask": None}
+
         with h5py.File(path, "r") as f:
+            for key in tensors.keys():
+                if key in f:
+                    tensors[key] = torch.from_numpy(f[key][:])
+        
+        if transform:
+            if callable(transform):
+                # Apply the same transform to all tensors
+                tensors = {key: (transform(tensor) if tensor is not None else None) for key, tensor in tensors.items()}
             
-            if "time" in f:
-                time = torch.from_numpy(f["time"][:])
-            
-            if "continuous" in f:
+            elif isinstance(transform, dict):
+                # Apply specific transforms to individual tensors
+                for key, func in transform.items():
+                    if key in tensors and tensors[key] is not None and callable(func):
+                        tensors[key] = func(tensors[key])
 
-                continuous = torch.from_numpy(f["continuous"][:])
+        state = cls(tensors['time'], tensors['continuous'], tensors['discrete'], tensors['mask'])
+        return state.to(device) if device else state
 
-                if transform == "standardize":
-                    continuous = (continuous - mean) / std
-
-                elif transform == "destandardize":
-                    continuous = continuous * std + mean
-                
-            if "discrete" in f:
-                discrete = torch.from_numpy(f["discrete"][:])
-                
-            if "mask" in f:
-                mask = torch.from_numpy(f["mask"][:])
-
-        state = cls(time, continuous, discrete, mask)
-        if device:
-            return state.to(device)
-        return state
 
 
     @classmethod

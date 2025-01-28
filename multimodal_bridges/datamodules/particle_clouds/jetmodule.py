@@ -17,12 +17,12 @@ class JetDataModule(L.LightningDataModule):
     def __init__(
         self,
         config,
-        preprocess=True,
-        metadata_path=None,
-    ):
+        transform=None
+        ):
         super().__init__()
+
         self.config = config
-        self.preprocess = preprocess
+        self.transform = transform
         self.batch_size = config.data.batch_size
         self.num_workers = config.data.num_workers
         self.pin_memory = config.data.pin_memory
@@ -51,7 +51,6 @@ class JetDataModule(L.LightningDataModule):
                 data_dir=path_source,
                 data_files=test_files_source,
             )
-            self.metadata["source"] = self._load_metadata(config.data.source_path)
 
         if path_target:
             self.target_dataset_train = JetDataset[name_target](
@@ -62,7 +61,6 @@ class JetDataModule(L.LightningDataModule):
                 data_dir=path_target,
                 data_files=test_files_target,
             )
-            self.metadata["target"] = self._load_metadata(config.data.target_path)
 
     #####################
     # Lightning methods #
@@ -74,7 +72,7 @@ class JetDataModule(L.LightningDataModule):
         if stage == "fit" or stage is None:
             log.info("Setting up datasets for training...")
 
-            self._prepare_fit_datasets(preprocess=self.preprocess)
+            self._prepare_fit_datasets()
             dataset = MultiModalDataset(self)
 
             idx0, idx1 = self._idx_data_split(dataset, self.split_ratios)
@@ -85,7 +83,7 @@ class JetDataModule(L.LightningDataModule):
         if stage == "predict":
             log.info("Setting up datasets for generation...")
 
-            self._prepare_predict_datasets(preprocess=self.preprocess)
+            self._prepare_predict_datasets()
             self.predict_dataset = MultiModalDataset(self)
 
     def train_dataloader(self):
@@ -111,40 +109,46 @@ class JetDataModule(L.LightningDataModule):
             collate_fn=data_coupling_collate_fn,
         )
 
-    def _prepare_fit_datasets(self, preprocess=True):
+    def _prepare_fit_datasets(self):
         if hasattr(self, "source_dataset_train"):
-            self.source = self.source_dataset_train(
+            source, metadata = self.source_dataset_train(
                 self.num_jets,
                 self.max_num_particles,
                 download=True,
-                transform="standardize",
+                transform=self.transform
             )
+            self.source = source
+            self.metadata["source"] = metadata 
 
         if hasattr(self, "target_dataset_train"):
-            self.target = self.target_dataset_train(
+            target, metadata = self.target_dataset_train(
                 self.num_jets,
                 self.max_num_particles,
                 download=True,
-                transform="standardize",
+                transform=self.transform,
             )
+            self.target = target
+            self.metadata["target"] = metadata
 
         self._clear_unavailable_modes()  # remove data modes that are not needed
 
-    def _prepare_predict_datasets(self, preprocess=True):
+    def _prepare_predict_datasets(self):
         if hasattr(self, "source_dataset_pred"):
-            self.source = self.source_dataset_pred(
+            source, _ = self.source_dataset_pred(
                 self.num_jets,
                 self.max_num_particles,
                 download=True,
-                transform="standardize",
+                transform=self.transform,
             )
+            self.source = source
 
         if hasattr(self, "target_dataset_pred"):
-            self.target = self.target_dataset_pred(
+            target, _ = self.target_dataset_pred(
                 self.num_jets,
                 self.max_num_particles,
                 download=True,
             )
+            self.target = target
 
         self._clear_unavailable_modes()  # remove data modes that are not needed
 

@@ -25,7 +25,7 @@ class ParticleClouds:
     data: TensorMultiModal = None
 
     def __post_init__(self):
-        self.continuous = self.transform(self.data.continuous)
+        self.continuous = self.data.continuous
         self.discrete = self.data.discrete
         self.mask = self.data.mask
         self.pt = self.continuous[..., 0]
@@ -41,8 +41,17 @@ class ParticleClouds:
     def __len__(self):
         return len(self.data)
 
-    def transform(self, continuous):
-        return continuous
+    @property
+    def has_continuous(self):
+        if self.data.has_continuous:
+            return True
+        return False
+    
+    @property
+    def has_discrete(self):
+        if self.data.has_discrete:
+            return True
+        return False
 
     def histplot(
         self,
@@ -73,9 +82,7 @@ class ParticleClouds:
 
         sns.histplot(x, element="step", ax=ax, **kwargs)
         ax.set_xlabel(
-            "particle-level " + feature
-            if xlabel is None
-            else xlabel,
+            "particle-level " + feature if xlabel is None else xlabel,
             fontsize=fontsize,
         )
         ax.set_ylabel(ylabel, fontsize=fontsize)
@@ -103,19 +110,16 @@ class JetFeatures:
         self.py = self.constituents.py.sum(axis=-1)
         self.pz = self.constituents.pz.sum(axis=-1)
         self.e = self.constituents.e.sum(axis=-1)
-        self.pt = torch.clamp_min(self.px**2 + self.py**2, 0).sqrt()
-        self.m = torch.clamp_min(
-            self.e**2 - self.px**2 - self.py**2 - self.pz**2, 0
-        ).sqrt()
+        self.pt = torch.sqrt(self.px**2 + self.py**2)
+        self.m = torch.sqrt(self.e**2 - self.pt**2 - self.pz**2)
         self.eta = 0.5 * torch.log((self.pt + self.pz) / (self.pt - self.pz))
         self.phi = torch.atan2(self.py, self.px)
         self.numParticles = torch.sum(self.constituents.mask, dim=1)
 
         self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
 
-        if hasattr(self.constituents, "discrete"):
+        if self.constituents.has_discrete:
             counts = self._get_flavor_counts()
-
             self.numPhotons = counts[..., 0]
             self.numNeutralHadrons = counts[..., 1]
             self.numNegativeHadrons = counts[..., 2]
@@ -233,7 +237,13 @@ class JetFeatures:
         return count
 
     def plot_flavor_count_per_jet(
-        self, marker=".", color="darkred", markersize=2, ax=None, figsize=(3, 2), label=None,
+        self,
+        marker=".",
+        color="darkred",
+        markersize=2,
+        ax=None,
+        figsize=(3, 2),
+        label=None,
     ):
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)

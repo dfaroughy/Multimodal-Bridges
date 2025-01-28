@@ -25,7 +25,7 @@ from encoders.embedder import MultiModalEmbedder
 #         self.encoder = MultiModalEPiC(config)
 #         self.bridge_continuous = UniformLinearFlow(config)
 #         self.loss_continuous_fn = nn.MSELoss(reduction="none")
-
+        # self.sample_source = 
 
 
 class MultiModalBridgeMatching(L.LightningModule):
@@ -165,7 +165,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             logits = heads.discrete.transpose(1, 2)
             targets = batch.target.discrete.squeeze(-1).to(self.device)
 
-            loss_ce = self.loss_discrete_fn(logits, targets.long())
+            loss_ce = self.loss_discrete_fn(logits, targets.long()).unsqueeze(-1) * state.mask 
             loss_discrete = loss_ce.sum() / state.mask.sum()
 
         return loss_continuous, loss_discrete
@@ -227,6 +227,8 @@ class MultiModalBridgeMatching(L.LightningModule):
 
             if heads.has_discrete:
                 state = self.bridge_discrete.forward_step(state, heads, delta_t)
+
+        state.time = state.time.unsqueeze(1).repeat(1, state.shape[-1], 1)
 
         return state.detach().cpu()
 

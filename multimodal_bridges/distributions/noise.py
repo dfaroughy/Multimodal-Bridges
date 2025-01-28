@@ -37,16 +37,18 @@ class MultiModalNoise:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
 
         time = None
-        continuous = torch.randn((num_jets, max_num_particles, 3)) * mask
+        continuous = torch.randn((num_jets, max_num_particles, 3)) 
 
         if vocab_size > 0:
             discrete = (
-                torch.randint(0, vocab_size, (num_jets, max_num_particles, 1)) * mask
+                torch.randint(0, vocab_size, (num_jets, max_num_particles, 1))
             )
         else:
             discrete = None
 
         sample = TensorMultiModal(time, continuous, discrete, mask)
+        sample.apply_mask()
+
         return sample.to(device)
 
     def _load_metadata(self, path):

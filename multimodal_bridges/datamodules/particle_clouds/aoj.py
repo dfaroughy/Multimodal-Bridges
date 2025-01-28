@@ -4,11 +4,9 @@ import h5py
 import os
 import urllib.request
 import json
-from pathlib import Path
 from pipeline.helpers import SimpleLogger as log
 from tensorclass import TensorMultiModal
 
-from datamodules.particle_clouds.utils import JetFeatures
 
 class AspenOpenJets:
     """data constructor for the Aspen OpenJets dataset.
@@ -25,10 +23,10 @@ class AspenOpenJets:
         self.data_dir = data_dir
         self.data_files = data_files
 
-        if os.path.exists(Path(data_dir) / 'metadata.json'):
-            metadata = self._load_metadata(data_dir)
-            self.mean = torch.tensor(metadata["continuous_mean"])
-            self.std = torch.tensor(metadata["continuous_std"])
+        # if os.path.exists(Path(data_dir) / 'metadata.json'):
+        #     metadata = self._load_metadata(data_dir)
+        #     self.mean = torch.tensor(metadata["continuous_mean"])
+        #     self.std = torch.tensor(metadata["continuous_std"])
 
     def __call__(
         self,
@@ -86,24 +84,30 @@ class AspenOpenJets:
         discrete = torch.cat(discrete_feats, dim=0)[:num_jets, :max_num_particles, :]
         mask = torch.cat(masks, dim=0)[:num_jets, :max_num_particles, :]
 
-        # various transformations for continuous feats:
+        # get basic data statistics and preprocess continuous features
 
-        if transform == "standardize":
-            continuous = (continuous - self.mean) / self.std
+        metadata = self._extract_metadata(continuous, mask)
+        
+        if transform == 'standardize':
+            mean = torch.tensor(metadata['mean'])
+            std = torch.tensor(metadata['std'])
+            continuous = (continuous - mean) / std
+
+        if transform == 'normalize':
+            min_val = torch.tensor(metadata['min'])
+            max_val = torch.tensor(metadata['max'])
+            continuous = (continuous - min_val) / (max_val - min_val)
+        
+        if transform == "log_pt":
+            continuous[:, :, 0] = torch.log(continuous[:, :, 0] + 1e-6)
+
+        # create a multimodal tensor output
 
         output = TensorMultiModal(None, continuous, discrete, mask)
         output.apply_mask()
 
-        return output
+        return output, metadata
 
-    def get_jet_features(self, data: TensorMultiModal, transform=None,) -> TensorMultiModal:
-        if transform == "standardize":
-            data.continuous = data.continuous * self.std + self.mean
-
-        elif transform == "log_pt":
-            data.continuous[:, :, 0] = torch.exp(data.continuous[:, :, 0]) - 1e-6
-
-        return JetFeatures(data)
 
     def _download_file(self, target_file):
         """Download a file from a URL to a local path."""
@@ -187,3 +191,21 @@ class AspenOpenJets:
         with open(metadata_file, "r") as f:
             metadata = json.load(f)
         return metadata
+
+    def _extract_metadata(self, continuous, mask):
+        mask_bool = mask.squeeze(-1) > 0
+        nums = mask.sum(dim=1).squeeze()
+        hist, _ = np.histogram(
+            nums, bins=np.arange(0, continuous.shape[1] + 2, 1), density=True
+        )
+        return {
+                "num_jets_sample": continuous.shape[0],
+                "num_particles_sample": nums.sum().item(),
+                "max_num_particles_per_jet": continuous.shape[1],
+                "mean": continuous[mask_bool].mean(0).tolist(),
+                "std": continuous[mask_bool].std(0).tolist(),
+                "min": continuous[mask_bool].min(0).values.tolist(),
+                "max": continuous[mask_bool].max(0).values.tolist(),
+                "categorical_probs": hist.tolist(),
+                }
+        
