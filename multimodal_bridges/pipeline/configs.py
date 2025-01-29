@@ -19,6 +19,9 @@ class DataConfig:
     modality: str = None
     batch_size: int = None
     split_ratios: List[float] = None
+    transform: str = None
+    continuous_features: List[str] = None
+    discrete_features: str = None
     target_name: str = None
     target_path: str = None
     target_train_files: Optional[List[str]] = None
@@ -54,7 +57,7 @@ class EncoderConfig:
     dim_emb_discrete: Optional[int] = 0
     dim_emb_context_continuous: Optional[int] = 0
     dim_emb_context_discrete: Optional[int] = 0
-    embed_type_time: Optional[str] = None
+    embed_type_time: Optional[str] = "SinusoidalPositionalEncoding"
     embed_type_continuous: Optional[str] = None
     embed_type_discrete: Optional[str] = None
     embed_type_context_continuous: Optional[str] = None
@@ -91,6 +94,7 @@ class CheckpointsConfig:
     filename: str = "best"
     save_last: bool = True
 
+
 @dataclass
 class ExperimentConfigs:
     path: str = None
@@ -104,13 +108,34 @@ class ExperimentConfigs:
     def __init__(self, config):
         self._load_config(config)
 
-        # post process:
 
-        if not self.encoder.embed_type_continuous:
+        # post-procese time attributes:
+        assert self.encoder.dim_emb_time > 0, "Non-zero dim_emb_time must be provided."
+
+        # post-process continuous attributes:
+
+        self.data.dim_continuous = len(self.data.continuous_features)
+        
+        if "onehot" in self.data.continuous_features:
+            self.data.dim_continuous += self.data.vocab_size - 1
+
+        if self.encoder.dim_emb_continuous > self.data.dim_continuous:
+            self.encoder.embed_type_continuous = "Linear"
+        else:
             self.encoder.dim_emb_continuous = self.data.dim_continuous
 
-        if not self.encoder.embed_type_context_continuous:
-            self.encoder.dim_emb_context_continuous = self.data.dim_context_continuous 
+        # post-process discrete attributes:
+        if self.data.modality != "continuous":
+            self.data.dim_discrete = 1
+
+            assert self.encoder.dim_emb_discrete > 0, (
+                "Non-zero dim_emb_discrete must be provided."
+            )
+            if self.data.discrete_features == "onehot":
+                self.encoder.embed_type_discrete = "Linear"
+
+            elif self.data.discrete_features == "tokens":
+                self.encoder.embed_type_discrete = "LookupTable"
 
     def update(self, config):
         if isinstance(config, dict):

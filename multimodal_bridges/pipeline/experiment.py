@@ -4,7 +4,7 @@ import os
 import torch
 from typing import List, Union
 import lightning.pytorch as L
-from lightning.pytorch.callbacks import RichProgressBar
+from lightning.pytorch.callbacks import RichProgressBar, ModelCheckpoint
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
 from lightning.pytorch.utilities import rank_zero_only
 
@@ -24,7 +24,6 @@ class ExperimentPipeline:
         self,
         datamodule: L.LightningDataModule,
         config: str = None,
-        transform: str = 'standardize',
         experiment_path: str = None,
         load_ckpt: str = "last.ckpt",
         accelerator: str = "gpu",
@@ -77,8 +76,8 @@ class ExperimentPipeline:
             self.logger = self._setup_logger(new_experiment=False)
 
         self.config.update(self.config_update)
-        self.callbacks = self._setup_callbacks_list(transform=transform)
-        self.datamodule = self._setup_datamodule(transform=transform)
+        self.callbacks = self._setup_callbacks_list()
+        self.datamodule = self._setup_datamodule()
 
     def train(self):
         """
@@ -169,12 +168,12 @@ class ExperimentPipeline:
         experiment.log_parameters(self.config.to_dict())
         return CometLogger(**self.config.comet_logger.__dict__)
 
-    def _setup_datamodule(self, transform):
+    def _setup_datamodule(self):
         """
         Prepare the data module for training and validation datasets.
         Saves metadata for later use.
         """
-        data = self.datamodule(config=self.config, transform=transform)
+        data = self.datamodule(config=self.config)
         self.metadata = data.metadata
         return data
 
@@ -188,11 +187,36 @@ class ExperimentPipeline:
         """
         Configure and return the necessary callbacks for training.
         """
+
         callbacks = []
         callbacks.append(RichProgressBar(theme=RichProgressBarTheme(**progress_bar)))
         callbacks.append(ModelCheckpointCallback(self.config))
+        
+        if self.config.data.modality == "multi-modal":
+        
+            callbacks.append(
+                ModelCheckpoint(
+                    monitor="val_loss_continuous",
+                    mode="min",
+                    save_top_k=3,
+                    filename="best-{epoch:02d}-{val_loss_continuous:.4f}",
+                    save_last=False,
+                )
+            )
+        
+            callbacks.append(
+                ModelCheckpoint(
+                    monitor="val_loss_discrete",
+                    mode="min",
+                    save_top_k=3,
+                    filename="best-{epoch:02d}-{val_loss_discrete:.4f}",
+                    save_last=False,
+                )
+            )
+        
         callbacks.append(ExperimentLoggerCallback(self.config))
-        callbacks.append(JetGeneratorCallback(self.config, transform=transform ))
+        callbacks.append(JetGeneratorCallback(self.config))
+
         return callbacks
 
     def _setup_trainer(self) -> L.Trainer:

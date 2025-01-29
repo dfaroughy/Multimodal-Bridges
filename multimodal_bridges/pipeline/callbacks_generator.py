@@ -19,7 +19,7 @@ class JetGeneratorCallback(Callback):
         super().__init__()
 
         self.config = config
-        self.transform = transform
+        self.transform = config.data.transform
         self.batched_gen_states = []
         self.batched_source_states = []
         self.batched_target_states = []

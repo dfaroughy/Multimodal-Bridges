@@ -3,7 +3,6 @@ import numpy as np
 from torch.utils.data import DataLoader, Subset
 import lightning.pytorch as L
 import json
-from pathlib import Path
 import os
 
 from pipeline.helpers import SimpleLogger as log
@@ -17,12 +16,13 @@ class JetDataModule(L.LightningDataModule):
     def __init__(
         self,
         config,
-        transform=None
         ):
         super().__init__()
 
         self.config = config
-        self.transform = transform
+        self.transform = config.data.transform
+        self.features = {'continuous': config.data.continuous_features,
+                         'discrete': config.data.discrete_features} 
         self.batch_size = config.data.batch_size
         self.num_workers = config.data.num_workers
         self.pin_memory = config.data.pin_memory
@@ -115,7 +115,8 @@ class JetDataModule(L.LightningDataModule):
                 self.num_jets,
                 self.max_num_particles,
                 download=True,
-                transform=self.transform
+                transform=self.transform,
+                features=self.features,
             )
             self.source = source
             self.metadata["source"] = metadata 
@@ -126,6 +127,7 @@ class JetDataModule(L.LightningDataModule):
                 self.max_num_particles,
                 download=True,
                 transform=self.transform,
+                features=self.features,
             )
             self.target = target
             self.metadata["target"] = metadata
@@ -139,6 +141,7 @@ class JetDataModule(L.LightningDataModule):
                 self.max_num_particles,
                 download=True,
                 transform=self.transform,
+                features=self.features,
             )
             self.source = source
 
@@ -147,6 +150,7 @@ class JetDataModule(L.LightningDataModule):
                 self.num_jets,
                 self.max_num_particles,
                 download=True,
+                features=self.features,
             )
             self.target = target
 
