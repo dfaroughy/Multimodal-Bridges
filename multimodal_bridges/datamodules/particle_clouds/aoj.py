@@ -9,9 +9,8 @@ from tensorclass import TensorMultiModal
 
 
 class AspenOpenJets:
-    """data constructor for the Aspen OpenJets dataset.
-    """
-    
+    """data constructor for the Aspen OpenJets dataset."""
+
     def __init__(
         self,
         data_dir,
@@ -28,7 +27,7 @@ class AspenOpenJets:
         max_num_particles=150,
         download=False,
         transform=None,
-        features={"continuous": ["pt", "eta_rel", "phi_rel"], "discrete": ["tokens"]},
+        features={"continuous": ["pt", "eta_rel", "phi_rel"], "discrete": "tokens"},
     ) -> TensorMultiModal:
         """
         Fetch the data, either from the provided files or by downloading it.
@@ -46,6 +45,9 @@ class AspenOpenJets:
         list_discrete_feats = []
         list_masks = []
         jet_count = 0
+
+        if features['discrete'] == 'onehot':
+            features['continuous'].append('onehot')
 
         for datafile in self.data_files:
             path = os.path.join(self.data_dir, datafile)
@@ -67,7 +69,10 @@ class AspenOpenJets:
             list_continuous_feats.append(
                 torch.cat([feats[x] for x in features["continuous"]], dim=-1)
             )
-            list_discrete_feats.append(torch.tensor(feats[features["discrete"]]))
+
+            if features["discrete"]=='tokens':
+                list_discrete_feats.append(torch.tensor(feats[features["discrete"]]))
+
             list_masks.append(mask)
 
             # halt if enough jets:
@@ -79,9 +84,13 @@ class AspenOpenJets:
         continuous = torch.cat(list_continuous_feats, dim=0)[
             :num_jets, :max_num_particles, :
         ]
-        discrete = torch.cat(list_discrete_feats, dim=0)[
-            :num_jets, :max_num_particles, :
-        ]
+
+        discrete = (
+            torch.cat(list_discrete_feats, dim=0)[:num_jets, :max_num_particles, :]
+            if len(list_discrete_feats)
+            else None
+        )
+
         mask = torch.cat(list_masks, dim=0)[:num_jets, :max_num_particles, :]
 
         metadata = self._extract_metadata(continuous, mask)
@@ -164,7 +173,12 @@ class AspenOpenJets:
     def _compute_continuous_coordinates(self, PFCands):
         """Compute relative kinematic and spatial coordinates."""
 
-        px, py, pz, e = PFCands[:, :, 0], PFCands[:, :, 1], PFCands[:, :, 2], PFCands[:, :, 3]
+        px, py, pz, e = (
+            PFCands[:, :, 0],
+            PFCands[:, :, 1],
+            PFCands[:, :, 2],
+            PFCands[:, :, 3],
+        )
         pt = np.sqrt(px**2 + py**2)
         eta = np.arcsinh(np.divide(pz, pt, out=np.zeros_like(pz), where=pt != 0))
         phi = np.arctan2(py, px)
@@ -177,18 +191,29 @@ class AspenOpenJets:
         phi_rel = (phi - jet_phi[:, None] + np.pi) % (2 * np.pi) - np.pi
 
         mask = PFCands[:, :, 3] > 0
-        
+
         feats = {}
-        feats['px'] = (px * mask)[:,:,None]
-        feats['py'] = (py * mask)[:,:,None]
-        feats['pz'] = (pz * mask)[:,:,None]
-        feats['e'] = (e * mask)[:,:,None]
-        feats["pt"] = (pt * mask)[:,:,None]
-        feats["eta"] = (eta * mask)[:,:,None]
-        feats["phi"] = (phi * mask)[:,:,None]
-        feats["eta_rel"] = (eta_rel * mask)[:,:,None]
-        feats["phi_rel"] = (phi_rel * mask)[:,:,None]
-    
+        feats["px"] = (px * mask)[:, :, None]
+        feats["py"] = (py * mask)[:, :, None]
+        feats["pz"] = (pz * mask)[:, :, None]
+        feats["e"] = (e * mask)[:, :, None]
+        feats["pt"] = (pt * mask)[:, :, None]
+        feats["eta"] = (eta * mask)[:, :, None]
+        feats["phi"] = (phi * mask)[:, :, None]
+        feats["eta_rel"] = (eta_rel * mask)[:, :, None]
+        feats["phi_rel"] = (phi_rel * mask)[:, :, None]
+
+
+        d0 = PFCands[:, :, 4]
+        d0Err = PFCands[:, :, 5]
+        dz = PFCands[:, :, 6]
+        dzErr = PFCands[:, :, 7]
+        
+        feats["d0"] = (d0 * mask)[:, :, None]
+        feats["dz"] = (dz * mask)[:, :, None]
+        feats["d0Err"] = (d0Err * mask)[:, :, None]
+        feats["dzErr"] = (dzErr * mask)[:, :, None]
+
         return feats, mask
 
     def _load_metadata(self, path):

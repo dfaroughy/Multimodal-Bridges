@@ -15,19 +15,6 @@ from datamodules.datasets import DataCoupling
 from encoders.embedder import MultiModalEmbedder
 
 
-# class AOJFLowMatchingEPiC(MultiModalBridgeMatching):
-
-#     def __init__(self, config: ExperimentConfigs):
-#         super().__init__()
-
-#         self.config = config
-#         self.embedder = MultiModalEmbedder(config)
-#         self.encoder = MultiModalEPiC(config)
-#         self.bridge_continuous = UniformLinearFlow(config)
-#         self.loss_continuous_fn = nn.MSELoss(reduction="none")
-        # self.sample_source = 
-
-
 class MultiModalBridgeMatching(L.LightningModule):
     """Bridge-Matching model for multi-modal data"""
 
@@ -59,7 +46,6 @@ class MultiModalBridgeMatching(L.LightningModule):
 
     def forward(self, state: TensorMultiModal, batch: DataCoupling) -> TensorMultiModal:
         h_local, h_global = self.embedder(state, batch)
-
         return self.encoder(h_local, h_global)
 
     # ...Lightning functions

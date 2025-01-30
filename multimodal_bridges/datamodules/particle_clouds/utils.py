@@ -38,6 +38,15 @@ class ParticleClouds:
         self.mask_bool = self.mask.squeeze(-1) > 0
         self.multiplicity = torch.sum(self.mask, dim=1)
 
+        if self.continuous.shape[-1] > 3:
+            self.d0 = self.continuous[..., 3]
+            self.d0Err = self.continuous[..., 4]
+            self.dz = self.continuous[..., 5] 
+            self.dzErr = self.continuous[..., 6]
+            self.d0_ratio = np.divide(self.d0, self.d0Err, out=np.zeros_like(self.d0), where=self.d0Err!=0)
+            self.dz_ratio = np.divide(self.dz, self.dzErr, out=np.zeros_like(self.dz), where=self.dzErr!=0)
+
+
     def __len__(self):
         return len(self.data)
 
@@ -57,6 +66,7 @@ class ParticleClouds:
         self,
         feature="pt",
         idx=None,
+        apply_mask=None,
         xlim=None,
         ylim=None,
         xlabel=None,
@@ -72,11 +82,15 @@ class ParticleClouds:
         if feature == "multiplicity":
             x = self.multiplicity.squeeze(-1)
         else:
+            if apply_mask is None:
+                apply_mask = self.mask_bool
+
             x = (
-                getattr(self, feature)[self.mask_bool]
+                getattr(self, feature)[apply_mask]
                 if idx is None
                 else getattr(self, feature)[:, idx]
             )
+
         if isinstance(x, torch.Tensor):
             x.cpu().numpy()
 

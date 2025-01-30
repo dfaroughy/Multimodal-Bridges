@@ -106,36 +106,28 @@ class ExperimentConfigs:
     comet_logger: CometLoggerConfig = field(default_factory=CometLoggerConfig)
 
     def __init__(self, config):
+
         self._load_config(config)
-
-
-        # post-procese time attributes:
         assert self.encoder.dim_emb_time > 0, "Non-zero dim_emb_time must be provided."
-
-        # post-process continuous attributes:
 
         self.data.dim_continuous = len(self.data.continuous_features)
         
-        if "onehot" in self.data.continuous_features:
-            self.data.dim_continuous += self.data.vocab_size - 1
+        if self.data.discrete_features:
+            self.data.vocab_size = 8 # hardcoded for now
+
+        if self.data.discrete_features == "onehot":
+            self.data.dim_continuous += self.data.vocab_size
+
+        if self.data.modality == "multi-modal":
+            self.data.dim_discrete = 1        
+            if self.data.discrete_features == "tokens":
+                self.encoder.embed_type_discrete = "LookupTable"
+                assert self.encoder.dim_emb_discrete > 0, "Non-zero dim_emb_discrete must be provided for lookup table."
 
         if self.encoder.dim_emb_continuous > self.data.dim_continuous:
             self.encoder.embed_type_continuous = "Linear"
         else:
             self.encoder.dim_emb_continuous = self.data.dim_continuous
-
-        # post-process discrete attributes:
-        if self.data.modality != "continuous":
-            self.data.dim_discrete = 1
-
-            assert self.encoder.dim_emb_discrete > 0, (
-                "Non-zero dim_emb_discrete must be provided."
-            )
-            if self.data.discrete_features == "onehot":
-                self.encoder.embed_type_discrete = "Linear"
-
-            elif self.data.discrete_features == "tokens":
-                self.encoder.embed_type_discrete = "LookupTable"
 
     def update(self, config):
         if isinstance(config, dict):

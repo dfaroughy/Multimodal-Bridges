@@ -3,7 +3,7 @@ import math
 from torch import nn
 from typing import Tuple
 
-from  tensorclass import TensorMultiModal
+from tensorclass import TensorMultiModal
 from pipeline.helpers import SimpleLogger as log
 
 
@@ -13,7 +13,7 @@ class EmbedMode(nn.Module):
     Args:
         embedding: Type of embedding ('Linear', 'MLP', etc.).
         dim_input: Input dimension size.
-        dim_hidden: Hidden/output dimension size.   
+        dim_hidden: Hidden/output dimension size.
     """
 
     def __init__(self, embedding_type, dim_input=None, dim_hidden=None):
@@ -71,11 +71,11 @@ class MultiModalEmbedder(nn.Module):
         super(MultiModalEmbedder, self).__init__()
 
         self.augmentation = config.encoder.data_augmentation
-        log.info("Augmenting local state with source data", self.augmentation)
+        log.info("Local state augmented with source data", self.augmentation)
 
         # feats dimensions
         dim_x = config.data.dim_continuous * (2 if self.augmentation else 1)
-        dim_k = config.data.dim_discrete * (2 if self.augmentation else 1)
+        dim_k = config.data.dim_discrete
         dim_emb_t = config.encoder.dim_emb_time
         dim_emb_x = config.encoder.dim_emb_continuous
         dim_emb_k = config.encoder.dim_emb_discrete
@@ -98,10 +98,10 @@ class MultiModalEmbedder(nn.Module):
                 self.embedding_continuous = EmbedMode(
                     config.encoder.embed_type_continuous,
                     dim_input=dim_x,
-                    dim_hidden=dim_x if dim_emb_x == 0 else dim_emb_x,
+                    dim_hidden=dim_emb_x,
                 )
 
-                log.warn(f"setting dim_emb_continuous = {dim_x}", dim_emb_x == 0)
+                # log.warn(f"setting dim_emb_continuous = {dim_x}", dim_emb_x == 0)
 
         # Discrete embeddings
         if config.data.modality in ["discrete", "multi-modal"]:
@@ -109,10 +109,10 @@ class MultiModalEmbedder(nn.Module):
                 self.embedding_discrete = EmbedMode(
                     config.encoder.embed_type_discrete,
                     dim_input=config.data.vocab_size,
-                    dim_hidden=dim_k if dim_emb_k == 0 else dim_emb_k,
+                    dim_hidden=dim_emb_k,
                 )
 
-                log.warn(f"setting dim_emb_discrete = {dim_k}", dim_emb_k == 0)
+                # log.warn(f"setting dim_emb_discrete = {dim_k}", dim_emb_k == 0)
 
         # Context embeddings
         if config.encoder.embed_type_context_continuous:
@@ -144,8 +144,8 @@ class MultiModalEmbedder(nn.Module):
             )
 
     def forward(
-        self, state: TensorMultiModal, batch: TensorMultiModal) -> Tuple[TensorMultiModal, TensorMultiModal]:
-    
+        self, state: TensorMultiModal, batch: TensorMultiModal
+    ) -> Tuple[TensorMultiModal, TensorMultiModal]:
         continuous_feats, discrete_feats = None, None
         continuous_context, discrete_context = None, None
 
@@ -159,7 +159,9 @@ class MultiModalEmbedder(nn.Module):
         # Embed features
         if state.has_continuous:
             if self.augmentation:
-                continuous_feats = torch.cat([state.continuous, batch.source.continuous], dim=-1)
+                continuous_feats = torch.cat(
+                    [state.continuous, batch.source.continuous], dim=-1
+                )
             else:
                 continuous_feats = state.continuous
             if hasattr(self, "embedding_continuous"):
@@ -174,21 +176,26 @@ class MultiModalEmbedder(nn.Module):
         state_loc.apply_mask()
 
         # Embed context
-        if batch.has_context: 
-
+        if batch.has_context:
             reshape = (*tuple(batch.context.shape), -1)
 
             if batch.context.has_continuous:
                 continuous_context = batch.context.continuous
                 if hasattr(self, "embedding_context_continuous"):
-                    continuous_context = self.embedding_context_continuous(continuous_context)
+                    continuous_context = self.embedding_context_continuous(
+                        continuous_context
+                    )
 
             if batch.context.has_discrete:
                 discrete_context = batch.context.discrete
                 if hasattr(self, "embedding_context_discrete"):
-                    discrete_context = self.embedding_context_discrete(discrete_context).view(reshape)
+                    discrete_context = self.embedding_context_discrete(
+                        discrete_context
+                    ).view(reshape)
 
-        state_glob = TensorMultiModal(time_context, continuous_context, discrete_context, None)
+        state_glob = TensorMultiModal(
+            time_context, continuous_context, discrete_context, None
+        )
 
         return state_loc, state_glob
 
