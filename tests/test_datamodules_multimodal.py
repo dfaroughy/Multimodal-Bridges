@@ -3,13 +3,12 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from pipeline.helpers import get_from_json
 from pipeline.helpers import SimpleLogger as log
 from pipeline.configs import ExperimentConfigs
 from tensorclass import TensorMultiModal
 
-from datamodules.particle_clouds.jetmodule import JetDataModule
-from datamodules.particle_clouds.utils import (
+from datamodules.jetmodule import JetDataModule
+from datamodules.utils import (
     map_basis_to_tokens,
     map_basis_to_onehot,
     map_tokens_to_basis,

@@ -38,7 +38,9 @@ class ParticleClouds:
         self.mask_bool = self.mask.squeeze(-1) > 0
         self.multiplicity = torch.sum(self.mask, dim=1)
 
-        if self.continuous.shape[-1] > 3:
+        self.has_displaced_vertex = self.continuous.shape[-1] > 3
+
+        if self.has_displaced_vertex:
             self.d0 = self.continuous[..., 3]
             self.d0Err = self.continuous[..., 4]
             self.dz = self.continuous[..., 5] 
@@ -46,6 +48,30 @@ class ParticleClouds:
             self.d0_ratio = np.divide(self.d0, self.d0Err, out=np.zeros_like(self.d0), where=self.d0Err!=0)
             self.dz_ratio = np.divide(self.dz, self.dzErr, out=np.zeros_like(self.dz), where=self.dzErr!=0)
 
+        if self.data.has_discrete:
+            self._flavored_kinematics("Photon", 0)
+            self._flavored_kinematics("NeutralHadron", 1)
+            self._flavored_kinematics("NegativeHadron", 2)
+            self._flavored_kinematics("PositiveHadron", 3)
+            self._flavored_kinematics("Electron", 4)
+            self._flavored_kinematics("Positron", 5)
+            self._flavored_kinematics("Muon", 6)
+            self._flavored_kinematics("AntiMuon", 7)
+
+    def _flavored_kinematics(self, name, idx):
+        
+        setattr(self, f"is{name}", (self.discrete.squeeze(-1) == idx) * self.mask_bool)
+        setattr(self, f"pt_{name}", self.pt[getattr(self, f"is{name}")])
+        setattr(self, f"eta_{name}", self.eta_rel[getattr(self, f"is{name}")])
+        setattr(self, f"phi_{name}", self.phi_rel[getattr(self, f"is{name}")])
+
+        if self.has_displaced_vertex:
+            setattr(self, f"d0_{name}", self.d0[getattr(self, f"is{name}")])
+            setattr(self, f"d0Err_{name}", self.d0Err[getattr(self, f"is{name}")])
+            setattr(self, f"dz_{name}", self.dz[getattr(self, f"is{name}")])
+            setattr(self, f"dzErr_{name}", self.dzErr[getattr(self, f"is{name}")])
+            setattr(self, f"d0_ratio_{name}", self.d0_ratio[getattr(self, f"is{name}")])
+            setattr(self, f"dz_ratio_{name}", self.dz_ratio[getattr(self, f"is{name}")])
 
     def __len__(self):
         return len(self.data)
@@ -65,8 +91,7 @@ class ParticleClouds:
     def histplot(
         self,
         feature="pt",
-        idx=None,
-        apply_mask=None,
+        apply_map='mask_bool',
         xlim=None,
         ylim=None,
         xlabel=None,
@@ -79,18 +104,14 @@ class ParticleClouds:
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
 
-        if feature == "multiplicity":
-            x = self.multiplicity.squeeze(-1)
-        else:
-            if apply_mask is None:
-                apply_mask = self.mask_bool
+        x = getattr(self, feature) 
 
-            x = (
-                getattr(self, feature)[apply_mask]
-                if idx is None
-                else getattr(self, feature)[:, idx]
-            )
+        if apply_map == 'mask_bool':
+            x = x[self.mask_bool]
 
+        elif apply_map is not None:
+            x = apply_map(x)
+        
         if isinstance(x, torch.Tensor):
             x.cpu().numpy()
 
@@ -161,6 +182,7 @@ class JetFeatures:
     def histplot(
         self,
         features="pt",
+        apply_map=None,
         xlim=None,
         ylim=None,
         xlabel=None,
@@ -171,10 +193,16 @@ class JetFeatures:
         **kwargs,
     ):
         x = getattr(self, features)
+
+        if apply_map is not None:
+            x = apply_map(x)
+
         if isinstance(x, torch.Tensor):
             x.cpu().numpy()
+
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
+            
         sns.histplot(x=x, element="step", ax=ax, **kwargs)
         ax.set_xlabel(
             "jet-level " + features if xlabel is None else xlabel,
@@ -296,7 +324,7 @@ class JetFeatures:
         ax.set_xticklabels(labels)
         ax.set_yscale("log")
         ax.set_ylim(1e-2, 5000)
-        ax.set_ylabel(r"$\langle N \rangle \pm 1\sigma$", fontsize=13)
+        ax.set_ylabel(r"$\langle N \rangle \pm 1\sigma$", fontsize=10)
         ax.set_xlabel(r"particle flavor", fontsize=13)
 
     def _substructure(self, R=0.8, beta=1.0, use_wta_scheme=True):

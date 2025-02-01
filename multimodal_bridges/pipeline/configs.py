@@ -113,7 +113,7 @@ class ExperimentConfigs:
         self.data.dim_continuous = len(self.data.continuous_features)
         
         if self.data.discrete_features:
-            self.data.vocab_size = 8 # hardcoded for now
+            assert self.data.vocab_size > 0, "vocab_size must be provided for discrete features"
 
         if self.data.discrete_features == "onehot":
             self.data.dim_continuous += self.data.vocab_size

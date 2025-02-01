@@ -9,6 +9,10 @@ class MultiModalNoise:
     def __init__(self, config):
         self.config = config
 
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
     def __call__(self, shape, device) -> TensorMultiModal:
         """
         Sample multi-modal random source:
@@ -20,13 +24,10 @@ class MultiModalNoise:
         """
 
         num_jets, max_num_particles = shape
-        vocab_size = self.config.data.vocab_size
-        dim_cont = self.config.data.dim_continuous
-        metadata = self._load_metadata(self.config.data.target_path)
             
-        if "categorical_probs" in metadata.keys():
+        if "categorical_probs" in self.metadata.keys():
             
-            probs = metadata["categorical_probs"]
+            probs = self.metadata["categorical_probs"]
             cat = Categorical(torch.tensor(probs))
             multiplicity = cat.sample((num_jets,))
             mask = torch.zeros((num_jets, max_num_particles))
@@ -38,19 +39,19 @@ class MultiModalNoise:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
 
         time = None
-        continuous = torch.randn((num_jets, max_num_particles, dim_cont)) 
+        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous)) 
         discrete = None
 
         if self.config.data.discrete_features == 'tokens':
             discrete = (
-                torch.randint(0, vocab_size, (num_jets, max_num_particles, 1))
+                torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
             )
         elif self.config.data.discrete_features == 'onehot':
-            continuous = torch.randn((num_jets, max_num_particles, dim_cont - vocab_size)) 
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous - self.vocab_size)) 
             pids = (
-                torch.randint(0, vocab_size, (num_jets, max_num_particles))
+                torch.randint(0, self.vocab_size, (num_jets, max_num_particles))
             )
-            pids = torch.nn.functional.one_hot(pids, vocab_size).float()
+            pids = torch.nn.functional.one_hot(pids, self.vocab_size).float()
             continuous = torch.cat((continuous, pids), dim=-1)
 
         sample = TensorMultiModal(time, continuous, discrete, mask)
@@ -63,3 +64,7 @@ class MultiModalNoise:
         with open(metadata_file, "r") as f:
             metadata = json.load(f)
         return metadata
+
+
+
+

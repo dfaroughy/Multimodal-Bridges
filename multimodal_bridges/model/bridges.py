@@ -18,8 +18,8 @@ class UniformLinearFlow:
       - z: delta function regularizer
     """
 
-    def __init__(self, config: dataclass):
-        self.sigma = config.model.sigma
+    def __init__(self, sigma):
+        self.sigma = sigma
 
     def sample(self, t, batch: DataCoupling):
         x0 = batch.source.continuous
@@ -58,8 +58,8 @@ class SchrodingerBridge:
       - z: noise
     """
 
-    def __init__(self, config: dataclass):
-        self.sigma = config.model.sigma
+    def __init__(self, sigma):
+        self.sigma = sigma
 
     def sample(self, t, batch: DataCoupling):
         x0 = batch.source.continuous
@@ -100,10 +100,9 @@ class TelegraphBridge:
     - k: discrete state at time t
     """
 
-    def __init__(self, config: dataclass):
-        self.gamma = config.model.gamma
-        self.time_epsilon = config.model.time_eps
-        self.vocab_size = config.data.vocab_size
+    def __init__(self, gamma, vocab_size):
+        self.gamma = gamma
+        self.vocab_size = vocab_size
 
     def sample(self, t, batch: DataCoupling):
         k0 = batch.source.discrete

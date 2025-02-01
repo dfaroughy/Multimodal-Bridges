@@ -25,12 +25,14 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.encoder = Encoder[config.encoder.name](config)
 
         if config.data.modality in ["continuous", "multi-modal"]:
-            self.bridge_continuous = Bridge[config.model.bridge_continuous](config)
+            sigma = config.model.sigma
+            self.bridge_continuous = Bridge[config.model.bridge_continuous](sigma)
             self.loss_continuous_fn = nn.MSELoss(reduction="none")
 
         if config.data.modality in ["discrete", "multi-modal"]:
+            gamma = config.model.gamma
             self.vocab_size = config.data.vocab_size
-            self.bridge_discrete = Bridge[config.model.bridge_discrete](config)
+            self.bridge_discrete = Bridge[config.model.bridge_discrete](gamma, self.vocab_size)
             self.loss_discrete_fn = nn.CrossEntropyLoss(reduction="none")
 
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)

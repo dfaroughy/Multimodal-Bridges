@@ -1,5 +1,5 @@
 import torch
-from datamodules.particle_clouds.aoj import AspenOpenJets
+from datamodules.aoj import AspenOpenJets
 from distributions.noise import MultiModalNoise
 from model.bridges import UniformLinearFlow, SchrodingerBridge, TelegraphBridge
 from encoders.epic import MultiModalEPiC

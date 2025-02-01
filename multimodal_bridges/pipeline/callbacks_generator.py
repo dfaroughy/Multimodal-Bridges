@@ -2,6 +2,7 @@ import os
 import json
 import torch
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import matplotlib.pyplot as plt
 
@@ -10,7 +11,7 @@ from lightning.pytorch.utilities import rank_zero_only
 
 from pipeline.configs import ExperimentConfigs
 from pipeline.helpers import SimpleLogger as log
-from datamodules.particle_clouds.utils import JetFeatures
+from datamodules.utils import JetFeatures
 from tensorclass import TensorMultiModal
 
 
@@ -23,15 +24,15 @@ class JetGeneratorCallback(Callback):
         self.batched_gen_states = []
         self.batched_source_states = []
         self.batched_target_states = []
-        
+
     def on_predict_start(self, trainer, pl_module):
         self.data_dir = Path(self.config.path) / "data"
-        self.metric_dir = Path(self.config.path) / "metrics"
+        self.metric_dir = os.path.join(self.config.path, "metrics")
         self.plots_dir = Path(self.config.path) / "plots"
         os.makedirs(self.data_dir, exist_ok=True)
         os.makedirs(self.metric_dir, exist_ok=True)
         os.makedirs(self.plots_dir, exist_ok=True)
-              
+
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
             self.batched_gen_states.append(outputs[0])
@@ -88,42 +89,43 @@ class JetGeneratorCallback(Callback):
 
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
 
-        with open(self.metric_dir / "performance_metrics.json", "w") as f:
-            json.dump(metrics, f, indent=4)
+        # with open(self.metric_dir / "performance_metrics.json", "w") as f:
+        #     json.dump(metrics, f, indent=4)
 
         if hasattr(self.config, "comet_logger"):
             figures = self.get_results_plots(gen_jets, test_jets)
-            trainer.logger.experiment.log_metrics(metrics)
-
             for key in figures.keys():
                 trainer.logger.experiment.log_figure(
                     figure=figures[key], figure_name=key
                 )
+            df = pd.DataFrame(metrics)
+            trainer.logger.experiment.log_table(
+                f"{self.metric_dir}/performance_metrics.csv", df
+            )
 
     def _postprocess(self, x: TensorMultiModal, transform=None):
-
         metadata = self._load_metadata(self.config.path)
 
-        if transform == 'standardize':
+        if transform == "standardize":
             mean = torch.tensor(metadata["target"]["mean"])
             std = torch.tensor(metadata["target"]["std"])
             x.continuous = x.continuous * std + mean
 
-        elif transform == 'normalize':
+        elif transform == "normalize":
             min_val = torch.tensor(metadata["target"]["min"])
             max_val = torch.tensor(metadata["target"]["max"])
-            x.continuous = x.continuous * (max_val - min_val) + min_val 
-        
-        if transform == 'log_pt':
+            x.continuous = x.continuous * (max_val - min_val) + min_val
+
+        if transform == "log_pt":
             x.continuous[:, :, 0] = torch.exp(x.continuous[:, :, 0]) - 1e-6
-        
-        if self.config.data.discrete_features == 'onehot':
-            x.discrete = x.continuous[:, :, -self.config.data.vocab_size:]
-            x.continuous = x.continuous[:, :, :-self.config.data.vocab_size]
+
+        if self.config.data.discrete_features == "onehot":
+            x.discrete = x.continuous[:, :, -self.config.data.vocab_size :]
+            x.continuous = x.continuous[:, :, : -self.config.data.vocab_size]
             x.discrete = torch.argmax(x.discrete, dim=-1).unsqueeze(-1)
-        
+
         x.apply_mask()
-        
+
         return x
 
     def _clean_temp_files(self):
@@ -143,11 +145,12 @@ class JetGeneratorCallback(Callback):
 
     def compute_performance_metrics(self, gen_jets, test_jets):
         return {
-            "Wasserstein1D_pt": test_jets.Wassertein1D("pt", gen_jets),
-            "Wasserstein1D_mass": test_jets.Wassertein1D("m", gen_jets),
-            "Wasserstein1D_tau21": test_jets.Wassertein1D("tau21", gen_jets),
-            "Wasserstein1D_tau23": test_jets.Wassertein1D("tau32", gen_jets),
-            "Wasserstein1D_d2": test_jets.Wassertein1D("d2", gen_jets),
+            'obs':['pt', 'm', 'tau21', 'tau32', 'd2'],
+            'W1':[test_jets.Wassertein1D("pt", gen_jets),
+            test_jets.Wassertein1D("m", gen_jets),
+            test_jets.Wassertein1D("tau21", gen_jets),
+            test_jets.Wassertein1D("tau32", gen_jets),
+            test_jets.Wassertein1D("d2", gen_jets)]
         }
 
     def get_results_plots(self, gen_jets, test_jets):
@@ -156,6 +159,7 @@ class JetGeneratorCallback(Callback):
                 "pt",
                 gen_jets.constituents,
                 test_jets.constituents,
+                apply_map='mask_bool',
                 xlabel=r"$p_t$ [GeV]",
                 binrange=(0, 400),
                 binwidth=5,
@@ -166,6 +170,7 @@ class JetGeneratorCallback(Callback):
                 "eta_rel",
                 gen_jets.constituents,
                 test_jets.constituents,
+                apply_map='mask_bool',
                 xlabel=r"$\eta^{\rm rel}$",
                 log=True,
                 suffix_file="_part",
@@ -174,6 +179,7 @@ class JetGeneratorCallback(Callback):
                 "phi_rel",
                 gen_jets.constituents,
                 test_jets.constituents,
+                apply_map='mask_bool',
                 xlabel=r"$\phi^{\rm rel}$",
                 log=True,
                 suffix_file="_part",
@@ -228,81 +234,13 @@ class JetGeneratorCallback(Callback):
                 "multiplicity",
                 gen_jets.constituents,
                 test_jets.constituents,
+                apply_map=lambda x: x.squeeze(-1),
                 discrete=True,
                 xlabel=r"$N$",
             ),
         }
         if gen_jets.constituents.has_discrete:
             discrete_plots = {
-                "total charge": self.plot_feature(
-                    "charge",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
-                    discrete=True,
-                ),
-                "jet charge": self.plot_feature(
-                    "jet_charge",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
-                ),
-                "photon multiplicity": self.plot_feature(
-                    "numPhotons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_\gamma$",
-                    discrete=True,
-                ),
-                "neutral hadron multiplicity": self.plot_feature(
-                    "numNeutralHadrons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{\rm h^0}$",
-                    discrete=True,
-                ),
-                "negative hadron multiplicity": self.plot_feature(
-                    "numNegativeHadrons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{\rm h^-}$",
-                    discrete=True,
-                ),
-                "positive hadron multiplicity": self.plot_feature(
-                    "numPositiveHadrons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{\rm h^+}$",
-                    discrete=True,
-                ),
-                "electron multiplicity": self.plot_feature(
-                    "numElectrons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{e^-}$",
-                    discrete=True,
-                ),
-                "positron multiplicity": self.plot_feature(
-                    "numPositrons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{e^+}$",
-                    discrete=True,
-                ),
-                "muon multiplicity": self.plot_feature(
-                    "numMuons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{\mu^-}$",
-                    discrete=True,
-                ),
-                "antimuon multiplicity": self.plot_feature(
-                    "numAntiMuons",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{\mu^+}$",
-                    discrete=True,
-                ),
                 "all hadrons": self.plot_feature(
                     "numHadrons",
                     gen_jets,
@@ -317,30 +255,31 @@ class JetGeneratorCallback(Callback):
                     xlabel=r"$N_{\ell}$",
                     discrete=True,
                 ),
-                "all charged": self.plot_feature(
-                    "numCharged",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{charged}$",
-                    discrete=True,
-                ),
-                "all neutral": self.plot_feature(
-                    "numNeutrals",
-                    gen_jets,
-                    test_jets,
-                    xlabel=r"$N_{neutrals}$",
-                    discrete=True,
-                ),
+                "electric charges": self.plot_charges(gen_jets, test_jets),
                 "flavor counts": self.plot_flavor_counts_per_jet(gen_jets, test_jets),
-                "photon pt": self.plot_flavored_pt(0, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{\gamma}$"),
-                "neutral hadron pt": self.plot_flavored_pt(1, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{h^0}$"),
-                "negative hadron pt": self.plot_flavored_pt(2, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{h^-}$"),
-                "positive hadron pt": self.plot_flavored_pt(3, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{h^+}$"),
-                "electron pt": self.plot_flavored_pt(4, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{e^-}$"),
-                "positron pt": self.plot_flavored_pt(5, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{e^+}$"),
-                "muon pt": self.plot_flavored_pt(6, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{\mu^-}$"),
-                "antimuon pt": self.plot_flavored_pt(7, gen_jets.constituents, test_jets.constituents, xlabel=r"$p_T^{\mu^+}$"),
-
+                "photon kin": self.plot_flavored_kinematics(
+                    "Photon", gen_jets, test_jets
+                ),
+                "neutral hadron kin": self.plot_flavored_kinematics(
+                    "NeutralHadron", gen_jets, test_jets
+                ),
+                "negative hadron kin": self.plot_flavored_kinematics(
+                    "NegativeHadron", gen_jets, test_jets
+                ),
+                "positive hadron kin": self.plot_flavored_kinematics(
+                    "PositiveHadron", gen_jets, test_jets
+                ),
+                "electron kin": self.plot_flavored_kinematics(
+                    "Electron", gen_jets, test_jets
+                ),
+                "positron kin": self.plot_flavored_kinematics(
+                    "Positron", gen_jets, test_jets
+                ),
+                "muon kin": self.plot_flavored_kinematics(
+                    "Muon", gen_jets, test_jets),
+                "antimuon kin": self.plot_flavored_kinematics(
+                    "AntiMuon", gen_jets, test_jets
+                ),
             }
             return {**continuous_plots, **discrete_plots}
         return continuous_plots
@@ -350,6 +289,7 @@ class JetGeneratorCallback(Callback):
         feat,
         gen,
         test,
+        apply_map=None,
         xlabel=None,
         log=False,
         binwidth=None,
@@ -360,6 +300,7 @@ class JetGeneratorCallback(Callback):
         fig, ax = plt.subplots(1, 1, figsize=(4, 4))
         gen.histplot(
             feat,
+            apply_map=apply_map,
             xlabel=xlabel,
             ax=ax,
             stat="density",
@@ -373,6 +314,7 @@ class JetGeneratorCallback(Callback):
         )
         test.histplot(
             feat,
+            apply_map=apply_map,
             xlabel=xlabel,
             ax=ax,
             stat="density",
@@ -402,16 +344,209 @@ class JetGeneratorCallback(Callback):
         plt.savefig(self.plots_dir / "flavor_counts.png")
         return fig
 
+    def plot_flavored_kinematics(self, flavor, gen, test):
+        flavor_labels = {
+            "Electron": "{\,e^-}",
+            "Positron": "{\,e^+}",
+            "Muon": "{\,\mu^-}",
+            "AntiMuon": "{\,\mu^+}",
+            "Photon": "\gamma",
+            "NeutralHadron": "{\,h^0}",
+            "NegativeHadron": "{\,h^-}",
+            "PositiveHadron": "{\,h^+}",
+        }
 
-    def plot_flavored_pt(self, idx, gen, test, xlabel):
+        fig, ax = plt.subplots(1, 4, figsize=(8, 2))
+        test.constituents.histplot(
+            f"pt_{flavor}",
+            apply_map=None,
+            ax=ax[0],
+            fill=False,
+            bins=100,
+            lw=1,
+            color="k",
+            log_scale=(True, True),
+            stat="density",
+            xlim=(1e-2, 800),
+            label="AOJ",
+        )
+        gen.constituents.histplot(
+            f"pt_{flavor}",
+            apply_map=None,
+            ax=ax[0],
+            fill=False,
+            bins=100,
+            lw=1,
+            color="crimson",
+            log_scale=(True, True),
+            stat="density",
+            xlim=(1e-2, 800),
+            label="generated",
+        )
+        test.constituents.histplot(
+            f"eta_{flavor}",
+            apply_map=None,
+            ax=ax[1],
+            fill=False,
+            bins=100,
+            color="k",
+            lw=1,
+            log_scale=(False, True),
+            stat="density",
+            xlim=(-1.2, 1.2),
+        )
+        gen.constituents.histplot(
+            f"eta_{flavor}",
+            apply_map=None,
+            ax=ax[1],
+            fill=False,
+            bins=100,
+            color="crimson",
+            lw=1,
+            log_scale=(False, True),
+            stat="density",
+            xlim=(-1.2, 1.2),
+        )
+        test.constituents.histplot(
+            f"phi_{flavor}",
+            apply_map=None,
+            ax=ax[2],
+            fill=False,
+            bins=100,
+            color="k",
+            lw=1,
+            log_scale=(False, True),
+            stat="density",
+            xlim=(-1.2, 1.2),
+        )
+        gen.constituents.histplot(
+            f"phi_{flavor}",
+            apply_map=None,
+            ax=ax[2],
+            fill=False,
+            bins=100,
+            color="crimson",
+            lw=1,
+            log_scale=(False, True),
+            stat="density",
+            xlim=(-1.2, 1.2),
+        )
+        test.histplot(
+            f"num{flavor}s",
+            ax=ax[3],
+            fill=False,
+            discrete=True,
+            lw=1,
+            color="k",
+            log_scale=(False, False),
+            stat="density",
+        )
+        gen.histplot(
+            f"num{flavor}s",
+            ax=ax[3],
+            fill=False,
+            discrete=True,
+            lw=1,
+            color="crimson",
+            log_scale=(False, False),
+            stat="density",
+        )
+        ax[0].set_xlabel(rf"$p_T^{flavor_labels[flavor]}$")
+        ax[1].set_xlabel(rf"$\eta^{flavor_labels[flavor]}$")
+        ax[2].set_xlabel(rf"$\phi^{flavor_labels[flavor]}$")
+        ax[3].set_xlabel(rf"$N_{flavor_labels[flavor]}$")
+        ax[0].set_ylabel("density")
 
-        gen_mask = gen.discrete.squeeze(-1) == idx * gen.mask_bool
-        test_mask = test.discrete.squeeze(-1) == idx * test.mask_bool
-
-        fig, ax = plt.subplots(1, 1, figsize=(4, 3))
-        gen.histplot("pt", apply_mask=gen_mask, xlabel=xlabel, ax=ax, fill=False, bins=100, lw=1, color="crimson", log_scale=(True, True), stat="density", xlim=(0, 500))
-        test.histplot("pt", apply_mask=test_mask, xlabel=xlabel, ax=ax, fill=False, bins=100, lw=1, color="k", log_scale=(True, True), stat="density", xlim=(0, 500))
-        plt.legend(fontsize=10)
         plt.tight_layout()
-        plt.savefig(self.plots_dir / f"flavored_pt_{idx}.png")
+        plt.legend(fontsize=10)
+        plt.savefig(self.plots_dir / f"kinematics_{flavor}.png")
+        return fig
+
+    def plot_charges(self, gen, test):
+        fig, ax = plt.subplots(1, 4, figsize=(8, 2))
+        test.histplot(
+            "numNeutrals",
+            ax=ax[0],
+            fill=False,
+            discrete=True,
+            lw=1,
+            color="k",
+            stat="density",
+            xlabel=r"$N_{Q=0}$",
+        )
+        gen.histplot(
+            "numNeutrals",
+            ax=ax[0],
+            fill=False,
+            discrete=True,
+            lw=1,
+            color="crimson",
+            stat="density",
+            xlabel=r"$N_{Q=0}$",
+        )
+        test.histplot(
+            "numCharged",
+            ax=ax[1],
+            fill=False,
+            discrete=True,
+            color="k",
+            lw=1,
+            stat="density",
+            xlabel=r"$N_{Q=\pm1}$",
+        )
+        gen.histplot(
+            "numCharged",
+            ax=ax[1],
+            fill=False,
+            discrete=True,
+            color="crimson",
+            lw=1,
+            stat="density",
+            xlabel=r"$N_{Q=\pm1}$",
+        )
+        test.histplot(
+            "charge",
+            ax=ax[2],
+            fill=False,
+            discrete=True,
+            color="k",
+            lw=1,
+            stat="density",
+            xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
+        )
+        gen.histplot(
+            "charge",
+            ax=ax[2],
+            fill=False,
+            discrete=True,
+            color="crimson",
+            lw=1,
+            stat="density",
+            xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
+        )
+        test.histplot(
+            "jet_charge",
+            ax=ax[3],
+            fill=False,
+            color="k",
+            lw=1,
+            stat="density",
+            xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
+        )
+        gen.histplot(
+            "jet_charge",
+            ax=ax[3],
+            fill=False,
+            color="crimson",
+            lw=1,
+            stat="density",
+            xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
+        )
+        ax[0].set_xticks([0, 20, 40, 60])
+        ax[1].set_xticks([0, 20, 40, 60, 80])
+        ax[2].set_xticks([-20, -10, 0, 10, 20])
+        ax[3].set_xticks([-0.75, 0, 0.75])
+        ax[0].set_ylabel("density")
+        plt.tight_layout()
+        plt.savefig(self.plots_dir / "charges.png")
         return fig

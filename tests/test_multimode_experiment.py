@@ -5,7 +5,7 @@ import h5py
 
 from pipeline.helpers import SimpleLogger as log
 from pipeline.experiment import ExperimentPipeline
-from datamodules.particle_clouds.jetmodule import JetDataModule
+from datamodules.jetmodule import JetDataModule
 
 log.warnings_off()
 

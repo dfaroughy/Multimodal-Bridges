@@ -1,7 +1,6 @@
 from comet_ml import ExistingExperiment
 from pytorch_lightning.loggers import CometLogger
 import os
-import torch
 from typing import List, Union
 import lightning.pytorch as L
 from lightning.pytorch.callbacks import RichProgressBar, ModelCheckpoint
