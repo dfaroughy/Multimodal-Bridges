@@ -1,42 +1,20 @@
 import torch
-import os
-import json
-import torch
 import numpy as np
 from torchdyn.datasets import generate_moons
-import matplotlib.pyplot as plt
 import math
 
 from tensorclass import TensorMultiModal
 
 class NGaussians:
-    def __init__(
-        self,
-        dim=2,
-        num_gaussians=8,
-        num_colors=8,
-        num_points_per_gaussian=1000,
-        std_dev=0.1,
-        scale=5,
-        labels_as_state=False,
-        labels_as_context=False,
-        random_colors=False,
-    ):
+    def __init__(self, dim=2, vocab_size=8):
+
         self.dim = dim
-        
-        self.num_points_per_gaussian = num_points_per_gaussian
-        self.num_gaussians = num_gaussians
-        self.N = num_gaussians * num_points_per_gaussian
-
-        self.num_colors = num_colors if num_colors > 0 else 1
+        self.num_gaussians = vocab_size
 
 
-        self.std_dev = std_dev
-        self.scale = scale
-        self.random_colors = random_colors
+    def __call__(self, num_points, device='cpu') -> TensorMultiModal:
 
-
-    def __call__(self, device) -> TensorMultiModal:
+        num_points_per_gaussian = num_points // self.num_gaussians
 
         angle_step = 2 * np.pi / self.num_gaussians
         positions = []
@@ -47,25 +25,31 @@ class NGaussians:
             center_x = np.cos(angle)
             center_y = np.sin(angle)
             normal = torch.distributions.multivariate_normal.MultivariateNormal(
-                torch.zeros(self.dim), math.sqrt(self.std_dev) * torch.eye(self.dim)
+                torch.zeros(self.dim), math.sqrt(0.1) * torch.eye(self.dim)
             )
-            points = normal.sample((self.num_points_per_gaussian,))
-            points += np.array([center_x, center_y]) * self.scale
+            points = normal.sample((num_points_per_gaussian,))
+            points += np.array([center_x, center_y]) * 5
             positions.append(points)
-            labels += [i % self.num_colors] * self.num_points_per_gaussian
+            labels += [i % self.num_gaussians] * num_points_per_gaussian
 
         positions = np.concatenate(positions, axis=0)
         positions = torch.tensor(positions, dtype=torch.float32)
         labels = np.array(labels)
         labels = torch.tensor(labels)
         idx = torch.randperm(len(labels))
-        continuous = positions[idx]
-        discrete = (
-            np.random.randint(0, self.num_gaussians, self.N)
-            if self.random_colors
-            else labels[idx]
-        )
-        
-        time, mask = None, None
-        multimodal_state = TensorMultiModal(time, continuous, discrete.long(), mask)
+        positions = positions[idx]
+        colors = labels[idx][:,None].long()
+        multimodal_state = TensorMultiModal(continuous=positions.unsqueeze(1), discrete=colors.unsqueeze(1))
+        return multimodal_state.to(device)
+
+class TwoMoons:
+    def __init__(self, dim=2):
+        self.dim = dim
+
+    def __call__(self, num_points, device='cpu') -> TensorMultiModal:
+        positions, labels = generate_moons(num_points, noise=0.2)
+        idx = torch.randperm(len(labels))
+        positions = positions[idx] * 3 - 1
+        colors = torch.tensor(labels[idx], dtype=torch.long)[:,None]
+        multimodal_state = TensorMultiModal(continuous=positions.unsqueeze(1), discrete=colors.unsqueeze(1))
         return multimodal_state.to(device)
