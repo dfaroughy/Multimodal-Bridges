@@ -16,25 +16,21 @@ trainer:
 
 data:
   modality: multi-modal
-  batch_size: 10
-  split_ratios: [0.7, 0.3]  # train / val / test
+  batch_size: 1024
+  split_ratios: [0.9, 0.1]  # train / val / test
+  transform: standardize
+  continuous_features: ['pt', 'eta_rel', 'phi_rel']
+  discrete_features: tokens
+  vocab_size: 8
+  # vocab_freq: [0.0995, 0.1307, 0.1002, 0.0989, 0.1427, 0.1427, 0.1427, 0.1427]
   target_name: AspenOpenJets
-  target_path: /home/df630/Multimodal-Bridges/tests/resources/
-  target_train_files: 2016H_job0_mini.h5
-  target_test_files: 2016H_job0_mini.h5
+  target_path: /home/df630/Multimodal-Bridges/data/aoj/
+  target_train_files: RunG_batch0.h5
+  target_test_files: RunG_batch1.h5
   source_name: MultiModalNoise
-  source_path: null
-  source_train_files: null
-  source_test_files: null
   min_num_particles: 0
   max_num_particles: 128
-  num_jets: 100
-  dim_continuous: 3             
-  dim_discrete: 1               
-  dim_context_continuous: 5
-  dim_context_discrete: 4      
-  vocab_size: 8 
-  vocab_size_context: 7  
+  num_jets: 100_000  
 
 model:
   bridge_continuous: UniformLinearFlow
@@ -47,22 +43,14 @@ model:
 
 encoder:
   name: MultiModalEPiC
-  num_blocks: 2
+  num_blocks: 10
   dim_hidden_local: 128
-  dim_hidden_glob: 32
+  dim_hidden_glob: 16
   skip_connection: true
   dropout: 0.2
-  data_augmentation: false
-  embed_type_time: SinusoidalPositionalEncoding
-  embed_type_continuous: MLP
-  embed_type_discrete: LookupTableMLP
-  embed_type_context_continuous: MLP
-  embed_type_context_discrete: LookupTableMLP
-  dim_emb_time: 32
-  dim_emb_continuous: 16
-  dim_emb_discrete: 12
-  dim_emb_context_continuous: 5
-  dim_emb_context_discrete: 2
+  dim_emb_time: 128
+  dim_emb_continuous: 128
+  dim_emb_discrete: 128
 
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz

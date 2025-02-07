@@ -11,7 +11,7 @@ from encoders.epic import MultiModalEPiC
 log.warnings_off()
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_multi-modal.yaml")
 
 
 @pytest.fixture
@@ -26,10 +26,7 @@ def dummy_batch():
         discrete=torch.randint(0, 8, (100, 128, 1)),
         mask=torch.ones(100, 128, 1),
     )
-    context = TensorMultiModal(
-        continuous=torch.randn(100, 5),
-        discrete=torch.randint(0, 7, (100, 4)),
-    )
+    context = None
     return DataCoupling(source, target, context)
 
 
@@ -52,5 +49,35 @@ def test_multimodal_encoder_EPiC(dummy_batch, dummy_state):
     encoder = MultiModalEPiC(config)
     head = encoder(state_loc, state_glob)
 
-    assert head.continuous is not None
-    assert head.discrete is not None
+    N = config.data.num_jets
+    D = config.data.max_num_particles
+    dim_vector = config.data.dim_continuous
+    dim_logits = config.data.dim_discrete * config.data.vocab_size
+
+    assert head.continuous.shape == (N, D, dim_vector)
+    assert head.discrete.shape == (N, D, dim_logits)
+
+
+if __name__ == "__main__":
+
+    source = TensorMultiModal(
+        continuous=torch.randn(100, 128, 3),
+        discrete=torch.randint(0, 8, (100, 128, 1)),
+        mask=torch.ones(100, 128, 1),
+    )
+    target = TensorMultiModal(
+        continuous=torch.randn(100, 128, 3),
+        discrete=torch.randint(0, 8, (100, 128, 1)),
+        mask=torch.ones(100, 128, 1),
+    )
+
+    state = TensorMultiModal(
+        time=torch.randn(100,1,1),
+        continuous=torch.randn(100, 128, 3),
+        discrete=torch.randint(0, 8, (100, 128, 1)),
+        mask=torch.ones(100, 128, 1),
+    )
+
+    batch = DataCoupling(source, target, None)
+
+    test_multimodal_encoder_EPiC(batch, state)

@@ -13,10 +13,15 @@ comet_logger:
   workspace: dfaroughy
 data:
   batch_size: 10
+  continuous_features:
+  - pt
+  - eta_rel
+  - phi_rel
   dim_context_continuous: 0
   dim_context_discrete: 0
   dim_continuous: 3
   dim_discrete: 1
+  discrete_features: tokens
   max_num_particles: 128
   min_num_particles: 0
   modality: multi-modal
@@ -34,6 +39,8 @@ data:
   target_path: /home/df630/Multimodal-Bridges/tests/resources/
   target_test_files: 2016H_job0_mini.h5
   target_train_files: 2016H_job0_mini.h5
+  transform: null
+  vocab_freq: null
   vocab_size: 8
   vocab_size_context: 0
 encoder:
@@ -45,14 +52,14 @@ encoder:
   dim_emb_time: 4
   dim_hidden_glob: 4
   dim_hidden_local: 4
-  dropout: 0.0
+  dropout: 0.2
   embed_type_context_continuous: null
   embed_type_context_discrete: null
   embed_type_continuous: Linear
   embed_type_discrete: LookupTable
   embed_type_time: SinusoidalPositionalEncoding
   name: MultiModalEPiC
-  num_blocks: 1
+  num_blocks: 2
   skip_connection: true
 model:
   bridge_continuous: UniformLinearFlow
@@ -62,7 +69,7 @@ model:
   num_timesteps: 10
   sigma: 0.0001
   time_eps: 0.0001
-path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/5c5224a57a244bd4b8fa7a886afa7c12
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/a4e55223e6f34516af890204cef75ebf
 trainer:
   gradient_clip_val: 1.0
   max_epochs: 5

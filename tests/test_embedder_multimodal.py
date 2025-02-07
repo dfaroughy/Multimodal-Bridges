@@ -11,7 +11,7 @@ from encoders.embedder import MultiModalEmbedder
 log.warnings_off()
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_multi-modal.yaml")
 
 
 @pytest.fixture
@@ -26,10 +26,7 @@ def dummy_batch():
         discrete=torch.randint(0, 8, (100, 128, 1)),
         mask=torch.ones(100, 128, 1),
     )
-    context = TensorMultiModal(
-        continuous=torch.randn(100, 5),
-        discrete=torch.randint(0, 7, (100, 4)),
-    )
+    context = None
     return DataCoupling(source, target, context)
 
 
@@ -64,12 +61,4 @@ def test_multimodal_embedder(dummy_batch, dummy_state):
         config.data.num_jets,
         config.data.max_num_particles,
         config.data.dim_discrete * config.encoder.dim_emb_discrete * aug_factor,
-    )
-    assert state_glob.continuous.shape == (
-        config.data.num_jets,
-        config.encoder.dim_emb_context_continuous,
-    )
-    assert state_glob.discrete.shape == (
-        config.data.num_jets,
-        config.data.dim_context_discrete * config.encoder.dim_emb_context_discrete,
     )

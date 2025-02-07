@@ -18,19 +18,16 @@ data:
   modality: multi-modal
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
+  continuous_features: ['pt', 'eta_rel', 'phi_rel']
+  discrete_features: tokens
   target_name: AspenOpenJets
   target_path: /home/df630/Multimodal-Bridges/tests/resources/
   target_train_files: 2016H_job0_mini.h5
   target_test_files: 2016H_job0_mini.h5
   source_name: MultiModalNoise
-  source_path: null
-  source_train_files: null
-  source_test_files: null
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
-  dim_continuous: 3             # pt, eta_rel, phi_phi
-  dim_discrete: 1               # flavor x charge
   vocab_size: 8 
 
 model:
@@ -44,20 +41,14 @@ model:
 
 encoder:
   name: MultiModalEPiC
-  num_blocks: 1
+  num_blocks: 2
   dim_hidden_local: 4
   dim_hidden_glob: 4
   skip_connection: true
-  dropout: 0.0
-  data_augmentation: false
-  embed_type_time: SinusoidalPositionalEncoding
-  embed_type_continuous: Linear
-  # embed_type_context_continuous: Linear
-  embed_type_discrete: LookupTable
+  dropout: 0.2
   dim_emb_time: 4
   dim_emb_continuous: 4
   dim_emb_discrete: 4
-  # dim_emb_context_continuous: 2
 
 comet_logger:
   api_key: 8ONjCXJ1ogsqG1UxQzKxYn7tz
