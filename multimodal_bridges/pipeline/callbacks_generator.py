@@ -89,9 +89,6 @@ class JetGeneratorCallback(Callback):
 
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
 
-        # with open(self.metric_dir / "performance_metrics.json", "w") as f:
-        #     json.dump(metrics, f, indent=4)
-
         if hasattr(self.config, "comet_logger"):
             figures = self.get_results_plots(gen_jets, test_jets)
             for key in figures.keys():
@@ -102,6 +99,9 @@ class JetGeneratorCallback(Callback):
             trainer.logger.experiment.log_table(
                 f"{self.metric_dir}/performance_metrics.csv", df
             )
+
+        # with open(self.metric_dir / "performance_metrics.json", "w") as f:
+        #     json.dump(metrics, f, indent=4)
 
     def _postprocess(self, x: TensorMultiModal, transform=None):
         metadata = self._load_metadata(self.config.path)
@@ -145,21 +145,42 @@ class JetGeneratorCallback(Callback):
 
     def compute_performance_metrics(self, gen_jets, test_jets):
         return {
-            'obs':['pt', 'm', 'tau21', 'tau32', 'd2'],
-            'W1':[test_jets.Wassertein1D("pt", gen_jets),
-            test_jets.Wassertein1D("m", gen_jets),
-            test_jets.Wassertein1D("tau21", gen_jets),
-            test_jets.Wassertein1D("tau32", gen_jets),
-            test_jets.Wassertein1D("d2", gen_jets)]
+            "obs": [
+                "pt",
+                "m",
+                "tau21",
+                "tau32",
+                "d2",
+                "total charge",
+                "jet charge",
+                "Photon  multiplicity",
+                "Neutral Hadron multiplicity",
+                "Charged Hadron multiplicity",
+                "Lepton multiplicity",
+            ],
+            "W1": [
+                test_jets.Wassertein1D("pt", gen_jets),
+                test_jets.Wassertein1D("m", gen_jets),
+                test_jets.Wassertein1D("tau21", gen_jets),
+                test_jets.Wassertein1D("tau32", gen_jets),
+                test_jets.Wassertein1D("d2", gen_jets),
+                test_jets.Wassertein1D("charge", gen_jets),
+                test_jets.Wassertein1D("jet_charge", gen_jets),
+                test_jets.Wassertein1D("numPhotons", gen_jets),
+                test_jets.Wassertein1D("numNeutralHadrons", gen_jets),
+                test_jets.Wassertein1D("numChargedHadrons", gen_jets),
+                test_jets.Wassertein1D("numLeptons", gen_jets),
+            ],
         }
 
     def get_results_plots(self, gen_jets, test_jets):
         continuous_plots = {
+            "gen clouds": self.display_clouds(gen_jets.constituents),
             "particle transverse momentum": self.plot_feature(
                 "pt",
                 gen_jets.constituents,
                 test_jets.constituents,
-                apply_map='mask_bool',
+                apply_map="mask_bool",
                 xlabel=r"$p_t$ [GeV]",
                 binrange=(0, 400),
                 binwidth=5,
@@ -170,7 +191,7 @@ class JetGeneratorCallback(Callback):
                 "eta_rel",
                 gen_jets.constituents,
                 test_jets.constituents,
-                apply_map='mask_bool',
+                apply_map="mask_bool",
                 xlabel=r"$\eta^{\rm rel}$",
                 log=True,
                 suffix_file="_part",
@@ -179,7 +200,7 @@ class JetGeneratorCallback(Callback):
                 "phi_rel",
                 gen_jets.constituents,
                 test_jets.constituents,
-                apply_map='mask_bool',
+                apply_map="mask_bool",
                 xlabel=r"$\phi^{\rm rel}$",
                 log=True,
                 suffix_file="_part",
@@ -275,8 +296,7 @@ class JetGeneratorCallback(Callback):
                 "positron kin": self.plot_flavored_kinematics(
                     "Positron", gen_jets, test_jets
                 ),
-                "muon kin": self.plot_flavored_kinematics(
-                    "Muon", gen_jets, test_jets),
+                "muon kin": self.plot_flavored_kinematics("Muon", gen_jets, test_jets),
                 "antimuon kin": self.plot_flavored_kinematics(
                     "AntiMuon", gen_jets, test_jets
                 ),
@@ -549,4 +569,20 @@ class JetGeneratorCallback(Callback):
         ax[0].set_ylabel("density")
         plt.tight_layout()
         plt.savefig(self.plots_dir / "charges.png")
+        return fig
+
+    def display_clouds(self, jets):
+        fig, ax = plt.subplots(2, 5, figsize=(16, 6))
+        jets.display_cloud(0, scale_marker=10, ax=ax[0, 0])
+        jets.display_cloud(1, scale_marker=10, ax=ax[0, 1])
+        jets.display_cloud(2, scale_marker=10, ax=ax[0, 2])
+        jets.display_cloud(3, scale_marker=10, ax=ax[0, 3])
+        jets.display_cloud(4, scale_marker=10, ax=ax[0, 4], legend=True)
+        jets.display_cloud(5, scale_marker=10, ax=ax[1, 0])
+        jets.display_cloud(6, scale_marker=10, ax=ax[1, 1])
+        jets.display_cloud(7, scale_marker=10, ax=ax[1, 2])
+        jets.display_cloud(8, scale_marker=10, ax=ax[1, 3])
+        jets.display_cloud(9, scale_marker=10, ax=ax[1, 4])
+        plt.tight_layout()
+        plt.savefig(self.plots_dir / "gen_particle_clouds.png", dpi=500)
         return fig

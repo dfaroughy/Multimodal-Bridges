@@ -30,9 +30,10 @@ class MultiModalEPiC(nn.Module):
             + config.encoder.dim_emb_context_discrete * config.data.dim_context_discrete
         )
 
-        self.epic = EPiCNetwork(
+        self.multimode_epic = EPiCNetwork(
             dim_input=dim_input,
-            dim_output=dim_output,
+            dim_output_continuous=config.data.dim_continuous,
+            dim_output_discrete=config.data.vocab_size * config.data.dim_discrete,
             dim_context=dim_context,
             num_blocks=config.encoder.num_blocks,
             dim_hidden_local=config.encoder.dim_hidden_local,
@@ -52,9 +53,12 @@ class MultiModalEPiC(nn.Module):
 
         mask = state_local.mask
 
-        h = self.epic(local_cat, global_cat, mask)
-        head_continuous = h[..., : self.config.data.dim_continuous] if state_local.has_continuous else None
-        head_discrete = h[..., self.config.data.dim_continuous :] if state_local.has_discrete else None
+        # h = self.epic(local_cat, global_cat, mask)
+        # head_continuous = h[..., : self.config.data.dim_continuous] if state_local.has_continuous else None
+        # head_discrete = h[..., self.config.data.dim_continuous :] if state_local.has_discrete else None
+
+        head_continuous, head_discrete = self.multimode_epic(local_cat, global_cat, mask)
+
         return TensorMultiModal(None, head_continuous, head_discrete, mask)
 
 
@@ -62,7 +66,8 @@ class EPiCNetwork(nn.Module):
     def __init__(
         self,
         dim_input,
-        dim_output=3,
+        dim_output_continuous=3,
+        dim_output_discrete=0,
         dim_context=0,
         num_blocks=6,
         dim_hidden_local=128,
@@ -99,7 +104,19 @@ class EPiCNetwork(nn.Module):
 
         # ...output layer:
 
-        self.output_layer = weight_norm(nn.Linear(dim_hidden_local, dim_output))
+        self.output_layer = weight_norm(nn.Linear(dim_hidden_local, dim_hidden_local))
+
+        self.continuous_head = torch.nn.Sequential(
+                                torch.nn.Linear(dim_hidden_local//2, dim_hidden_local//2),
+                                torch.nn.GELU(),
+                                torch.nn.Linear(dim_hidden_local//2, dim_output_continuous),
+                            )
+
+        self.discrete_head = torch.nn.Sequential(
+                                torch.nn.Linear(dim_hidden_local//2, dim_hidden_local//2),
+                                torch.nn.GELU(),
+                                torch.nn.Linear(dim_hidden_local//2, dim_output_discrete),
+                            )
 
     def meansum_pool(self, mask, x_local, *x_global):
         """masked pooling local features with mean and sum
@@ -122,10 +139,13 @@ class EPiCNetwork(nn.Module):
             x_local += x_local_skip
             x_global += x_global_skip
 
-        # ...output layer:
-        h = self.output_layer(x_local)
+        # ...output heads:
+        h = self.output_layer(x_local) * mask
+        h1, h2 =  torch.tensor_split(h, 2, dim=-1)
+        h_continuous = self.continuous_head(h1)
+        h_discrete = self.continuous_head(h2)
 
-        return h * mask  # [batch, points, feats]
+        return h_continuous, h_discrete  # [batch, points, feats]
 
 
 class EPiC_Projection(nn.Module):

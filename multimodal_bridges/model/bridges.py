@@ -44,7 +44,6 @@ class UniformLinearFlow:
     def forward_step(self, state, heads, delta_t):
         """Euler step for ODE solver"""
         state.continuous += delta_t * heads.continuous
-        state.continuous *= state.mask
         return state
 
 
@@ -88,7 +87,6 @@ class SchrodingerBridge:
         diffusion = self.diffusion(delta_t)
         delta_w = torch.randn_like(state.continuous)
         state.continuous += delta_t * state.continuous + diffusion * delta_w
-        state.continuous *= state.mask
         return state
 
 
@@ -207,7 +205,6 @@ class TelegraphBridge:
         state.discrete += net_jumps * jump_mask
         state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
         state.discrete = state.discrete.unsqueeze(-1)
-        state.discrete *= state.mask
         return state
 
 

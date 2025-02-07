@@ -13,7 +13,7 @@ class MultiModalNoise:
         self.dim_continuous = self.config.data.dim_continuous
         self.metadata = self._load_metadata(self.config.data.target_path)
 
-    def __call__(self, shape, device) -> TensorMultiModal:
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
         """
         Sample multi-modal random source:
         - time: None
@@ -25,7 +25,7 @@ class MultiModalNoise:
 
         num_jets, max_num_particles = shape
             
-        if "categorical_probs" in self.metadata.keys():
+        if sample_masks:
             
             probs = self.metadata["categorical_probs"]
             cat = Categorical(torch.tensor(probs))
