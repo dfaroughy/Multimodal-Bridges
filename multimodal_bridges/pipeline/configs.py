@@ -38,6 +38,7 @@ class DataConfig:
     dim_context_continuous: Optional[int] = 0
     dim_context_discrete: Optional[int] = 0
     vocab_size: Optional[int] = 0
+    vocab_freq: Optional[List[float]] = None
     vocab_size_context: Optional[int] = 0
     num_workers: Optional[int] = 0
     pin_memory: Optional[bool] = False

@@ -33,7 +33,8 @@ class MultiModalBridgeMatching(L.LightningModule):
             gamma = config.model.gamma
             self.vocab_size = config.data.vocab_size
             self.bridge_discrete = Bridge[config.model.bridge_discrete](gamma, self.vocab_size)
-            self.loss_discrete_fn = nn.CrossEntropyLoss(reduction="none")
+            freqs = torch.tensor(config.data.vocab_freq) if config.data.vocab_freq else None
+            self.loss_discrete_fn = nn.CrossEntropyLoss(weight=freqs, reduction="none")
 
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)
         self.save_hyperparameters()
@@ -102,7 +103,7 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         if not batch.has_target:
             batch.target = self.sample_target(
-                shape=batch.target.shape, device=self.device
+                shape=batch.target.shape, device=self.device, sample_masks=True
             )
 
         source_state = TensorMultiModal(
@@ -217,6 +218,7 @@ class MultiModalBridgeMatching(L.LightningModule):
                 state = self.bridge_discrete.forward_step(state, heads, delta_t)
 
         state.time = state.time.unsqueeze(1).repeat(1, state.shape[-1], 1)
+        state.apply_mask()
 
         return state.detach().cpu()
 

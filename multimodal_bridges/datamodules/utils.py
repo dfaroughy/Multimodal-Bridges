@@ -5,6 +5,7 @@ import vector
 from torch.nn import functional as F
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 from dataclasses import dataclass
 import fastjet
 import scipy
@@ -49,18 +50,23 @@ class ParticleClouds:
             self.dz_ratio = np.divide(self.dz, self.dzErr, out=np.zeros_like(self.dz), where=self.dzErr!=0)
 
         if self.data.has_discrete:
-            self._flavored_kinematics("Photon", 0)
-            self._flavored_kinematics("NeutralHadron", 1)
-            self._flavored_kinematics("NegativeHadron", 2)
-            self._flavored_kinematics("PositiveHadron", 3)
-            self._flavored_kinematics("Electron", 4)
-            self._flavored_kinematics("Positron", 5)
-            self._flavored_kinematics("Muon", 6)
-            self._flavored_kinematics("AntiMuon", 7)
+            self._flavored_kinematics("Photon", selection=self.discrete.squeeze(-1) == 0)
+            self._flavored_kinematics("NeutralHadron", selection=self.discrete.squeeze(-1) == 1)
+            self._flavored_kinematics("NegativeHadron", selection=self.discrete.squeeze(-1) == 2)
+            self._flavored_kinematics("PositiveHadron", selection=self.discrete.squeeze(-1) == 3)
+            self._flavored_kinematics("Electron", selection=self.discrete.squeeze(-1) == 4)
+            self._flavored_kinematics("Positron", selection=self.discrete.squeeze(-1) == 5)
+            self._flavored_kinematics("Muon", selection=self.discrete.squeeze(-1) == 6)
+            self._flavored_kinematics("AntiMuon", selection=self.discrete.squeeze(-1) == 7)
+            self._flavored_kinematics("ChargedHadron", selection=(self.discrete.squeeze(-1) == 2) | (self.discrete.squeeze(-1) == 3))
+            self._flavored_kinematics("Electrons", selection=(self.discrete.squeeze(-1) == 4) | (self.discrete.squeeze(-1) == 5))
+            self._flavored_kinematics("Muons", selection=(self.discrete.squeeze(-1) == 6) | (self.discrete.squeeze(-1) == 7))
+            self._flavored_kinematics("Lepton", selection=(self.discrete.squeeze(-1) > 3))
 
-    def _flavored_kinematics(self, name, idx):
+    def _flavored_kinematics(self, name, selection):
         
-        setattr(self, f"is{name}", (self.discrete.squeeze(-1) == idx) * self.mask_bool)
+        setattr(self, f"is{name}", selection * self.mask_bool)
+        setattr(self, f"num_{name}", torch.sum(getattr(self, f"is{name}"), dim=1))
         setattr(self, f"pt_{name}", self.pt[getattr(self, f"is{name}")])
         setattr(self, f"eta_{name}", self.eta_rel[getattr(self, f"is{name}")])
         setattr(self, f"phi_{name}", self.phi_rel[getattr(self, f"is{name}")])
@@ -113,7 +119,7 @@ class ParticleClouds:
             x = apply_map(x)
         
         if isinstance(x, torch.Tensor):
-            x.cpu().numpy()
+            x.detach().cpu().numpy()
 
         sns.histplot(x, element="step", ax=ax, **kwargs)
         ax.set_xlabel(
@@ -124,11 +130,137 @@ class ParticleClouds:
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
 
-    def display_cloud(self, idx):
-        """TODO
-        Display the particle cloud image for a given index.
-        """
-        pass
+    def display_cloud(
+            jets,
+            idx,
+            scale_marker=1.0,
+            ax=None,
+            figsize=(3.2, 3),
+            facecolor="whitesmoke",
+            title_box_anchor=(1.025, 1.125),
+            savefig=None,
+            legend=False
+        ):
+            eta =  jets.eta_rel[idx]
+            phi =  jets.phi_rel[idx]
+            pt = jets.pt[idx] * scale_marker
+            N = jets.mask[idx].squeeze(-1).sum().item()
+
+            if ax is None:
+                _, ax = plt.subplots(figsize=figsize)
+
+            ax.scatter(
+                eta[jets.isPhoton[idx]],
+                phi[jets.isPhoton[idx]],
+                marker="o",
+                s=pt[jets.isPhoton[idx]],
+                color="gold",
+                alpha=0.5,
+                label=r"$\gamma$",
+            )
+            ax.scatter(
+                eta[jets.isNeutralHadron[idx]],
+                phi[jets.isNeutralHadron[idx]],
+                marker="o",
+                s=pt[jets.isNeutralHadron[idx]],
+                color="forestgreen",
+                alpha=0.5,
+                label=r"$h^{0}$",
+            )
+            ax.scatter(
+                eta[jets.isNegativeHadron[idx]],
+                phi[jets.isNegativeHadron[idx]],
+                marker="^",
+                s=pt[jets.isNegativeHadron[idx]],
+                color="blue",
+                alpha=0.5,
+                label=r"$h^{-}$",
+            )
+            ax.scatter(
+                eta[jets.isPositiveHadron[idx]],
+                phi[jets.isPositiveHadron[idx]],
+                marker="v",
+                s=pt[jets.isPositiveHadron[idx]],
+                color="blue",
+                alpha=0.5,
+                label=r"$h^{+}$",
+            )
+            ax.scatter(
+                eta[jets.isElectron[idx]],
+                phi[jets.isElectron[idx]],
+                marker="^",
+                s=pt[jets.isElectron[idx]],
+                color="firebrick",
+                alpha=0.5,
+                label=r"$e^{-}$",
+            )
+            ax.scatter(
+                eta[jets.isPositron[idx]],
+                phi[jets.isPositron[idx]],
+                marker="v",
+                s=pt[jets.isPositron[idx]],
+                color="firebrick",
+                alpha=0.5,
+                label=r"$e^{+}$",
+            )
+            ax.scatter(
+                eta[jets.isMuon[idx]],
+                phi[jets.isMuon[idx]],
+                marker="^",
+                s=pt[jets.isMuon[idx]],
+                color="hotpink",
+                alpha=0.5,
+                label=r"$\mu^{-}$",
+            )
+            ax.scatter(
+                eta[jets.isAntiMuon[idx]],
+                phi[jets.isAntiMuon[idx]],
+                marker="v",
+                s=pt[jets.isAntiMuon[idx]],
+                color="hotpink",
+                alpha=0.5,
+                label=r"$\mu^{+}$",
+            )
+
+            # Define custom legend markers
+            h1 = Line2D([0], [0], marker="o", markersize=6, alpha=0.5, color="gold", linestyle="None")
+            h2 = Line2D([0], [0], marker="o", markersize=6, alpha=0.5, color="forestgreen", linestyle="None")
+            h3 = Line2D([0], [0], marker="^", markersize=6, alpha=0.5, color="blue", linestyle="None")
+            h4 = Line2D([0], [0], marker="v", markersize=6, alpha=0.5, color="blue", linestyle="None")
+            h5 = Line2D([0], [0], marker="^", markersize=6, alpha=0.5, color="firebrick", linestyle="None")
+            h6 = Line2D([0], [0], marker="v", markersize=6, alpha=0.5, color="firebrick", linestyle="None")
+            h7 = Line2D([0], [0], marker="^", markersize=6, alpha=0.5, color="hotpink", linestyle="None")
+            h8 = Line2D([0], [0], marker="v", markersize=6, alpha=0.5, color="hotpink", linestyle="None")
+
+            if legend:
+                ax.legend(
+                    [h1, h2, h3, h4, h5, h6, h7, h8],
+                    [r"$\gamma$", r"$h^0$", r"$h^-$", r"$h^+$", r"$e^-$", r"$e^+$", r"$\mu^{-}$", r"$\mu^{+}$"],
+                    loc="center left",        
+                    bbox_to_anchor=(1.05, 0.5),   
+                    markerscale=2,
+                    scatterpoints=1,
+                    fontsize=12,
+                    frameon=False,
+                    ncol=1,   
+                    handletextpad=0.5,
+                    columnspacing=1.0,
+                )
+
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.text(
+                0.975,
+                0.975,
+                fr"$N={N}$",
+                fontsize=14,
+                ha="right",
+                va="top",
+                transform=ax.transAxes,
+            )
+            ax.set_facecolor(facecolor)  # Set the axis background color
+
+
 
 
 @dataclass
@@ -151,28 +283,28 @@ class JetFeatures:
         self.phi = torch.atan2(self.py, self.px)
         self.numParticles = torch.sum(self.constituents.mask, dim=1)
 
-        self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
+        # self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
 
         if self.constituents.has_discrete:
-            counts = self._get_flavor_counts()
-            self.numPhotons = counts[..., 0]
-            self.numNeutralHadrons = counts[..., 1]
-            self.numNegativeHadrons = counts[..., 2]
-            self.numPositiveHadrons = counts[..., 3]
-            self.numElectrons = counts[..., 4]
-            self.numPositrons = counts[..., 5]
-            self.numMuons = counts[..., 6]
-            self.numAntiMuons = counts[..., 7]
-            self.numChargedHadrons = self.numPositiveHadrons + self.numNegativeHadrons
-            self.numHadrons = self.numNeutralHadrons + self.numChargedHadrons
-            self.numLeptons = (
-                self.numElectrons
-                + self.numPositrons
-                + self.numMuons
-                + self.numAntiMuons
-            )
-            self.numNeutrals = self.numPhotons + self.numNeutralHadrons
-            self.numCharged = self.numChargedHadrons + self.numLeptons
+            # counts = self._get_flavor_counts()
+            # self.numPhotons = counts[..., 0]
+            # self.numNeutralHadrons = counts[..., 1]
+            # self.numNegativeHadrons = counts[..., 2]
+            # self.numPositiveHadrons = counts[..., 3]
+            # self.numElectrons = counts[..., 4]
+            # self.numPositrons = counts[..., 5]
+            # self.numMuons = counts[..., 6]
+            # self.numAntiMuons = counts[..., 7]
+            # self.numChargedHadrons = self.numPositiveHadrons + self.numNegativeHadrons
+            # self.numHadrons = self.numNeutralHadrons + self.numChargedHadrons
+            # self.numLeptons = (
+            #     self.numElectrons
+            #     + self.numPositrons
+            #     + self.numMuons
+            #     + self.numAntiMuons
+            # )
+            # self.numNeutrals = self.numPhotons + self.numNeutralHadrons
+            # self.numCharged = self.numChargedHadrons + self.numLeptons
 
             self.charge = self._jet_charge(kappa=0.0)
             self.jet_charge = self._jet_charge(kappa=1.0)
@@ -269,12 +401,12 @@ class JetFeatures:
             flat_indices, minlength=num_jets * (vocab_size + 1)
         )
         count = token_counts.view(num_jets, vocab_size + 1)  # Reshape to (B, n + 1)
-        fracs = token_counts / mask.sum(
-            dim=1, keepdim=True
-        )  # Broadcast along the last dimension
+        # fracs = token_counts / mask.sum(
+        #     dim=1, keepdim=True
+        # )  # Broadcast along the last dimension
 
-        if return_fracs:
-            return fracs
+        # if return_fracs:
+        #     return fracs
 
         return count
 
@@ -287,12 +419,17 @@ class JetFeatures:
         figsize=(3, 2),
         label=None,
     ):
+
+
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
 
         count = self._get_flavor_counts(return_fracs=False).float()
         mean = count.mean(dim=0).cpu().numpy().tolist()
         std = count.std(dim=0).cpu().numpy().tolist()
+
+        if isinstance(color, str):
+            color = [color] * len(mean) 
 
         labels = [
             r"$\gamma$",
@@ -313,12 +450,12 @@ class JetFeatures:
                     (i - binwidth / 2, mu - sig),
                     binwidth,
                     2 * sig,
-                    color=color,
+                    color=color[i],
                     alpha=0.15,
                     linewidth=0.0,
                 )
             )
-            ax.plot(i, mu, marker, color=color, markersize=markersize, label=label)
+            ax.plot(i, mu, marker, color=color[i], markersize=markersize, label=label)
 
         ax.set_xticks(x_positions)
         ax.set_xticklabels(labels)
