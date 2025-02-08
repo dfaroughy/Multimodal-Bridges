@@ -283,28 +283,28 @@ class JetFeatures:
         self.phi = torch.atan2(self.py, self.px)
         self.numParticles = torch.sum(self.constituents.mask, dim=1)
 
-        # self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
+        self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
 
         if self.constituents.has_discrete:
-            # counts = self._get_flavor_counts()
-            # self.numPhotons = counts[..., 0]
-            # self.numNeutralHadrons = counts[..., 1]
-            # self.numNegativeHadrons = counts[..., 2]
-            # self.numPositiveHadrons = counts[..., 3]
-            # self.numElectrons = counts[..., 4]
-            # self.numPositrons = counts[..., 5]
-            # self.numMuons = counts[..., 6]
-            # self.numAntiMuons = counts[..., 7]
-            # self.numChargedHadrons = self.numPositiveHadrons + self.numNegativeHadrons
-            # self.numHadrons = self.numNeutralHadrons + self.numChargedHadrons
-            # self.numLeptons = (
-            #     self.numElectrons
-            #     + self.numPositrons
-            #     + self.numMuons
-            #     + self.numAntiMuons
-            # )
-            # self.numNeutrals = self.numPhotons + self.numNeutralHadrons
-            # self.numCharged = self.numChargedHadrons + self.numLeptons
+            counts = self._get_flavor_counts()
+            self.numPhotons = counts[..., 0]
+            self.numNeutralHadrons = counts[..., 1]
+            self.numNegativeHadrons = counts[..., 2]
+            self.numPositiveHadrons = counts[..., 3]
+            self.numElectrons = counts[..., 4]
+            self.numPositrons = counts[..., 5]
+            self.numMuons = counts[..., 6]
+            self.numAntiMuons = counts[..., 7]
+            self.numChargedHadrons = self.numPositiveHadrons + self.numNegativeHadrons
+            self.numHadrons = self.numNeutralHadrons + self.numChargedHadrons
+            self.numLeptons = (
+                self.numElectrons
+                + self.numPositrons
+                + self.numMuons
+                + self.numAntiMuons
+            )
+            self.numNeutrals = self.numPhotons + self.numNeutralHadrons
+            self.numCharged = self.numChargedHadrons + self.numLeptons
 
             self.charge = self._jet_charge(kappa=0.0)
             self.jet_charge = self._jet_charge(kappa=1.0)

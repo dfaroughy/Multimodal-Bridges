@@ -98,12 +98,12 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         if not batch.has_source:
             batch.source = self.sample_source(
-                shape=batch.target.shape, device=self.device
+                shape=batch.target.shape, device=self.device, sample_masks=True
             )
 
         if not batch.has_target:
             batch.target = self.sample_target(
-                shape=batch.target.shape, device=self.device, sample_masks=True
+                shape=batch.target.shape, device=self.device
             )
 
         source_state = TensorMultiModal(
