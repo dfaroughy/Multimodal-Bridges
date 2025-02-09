@@ -131,6 +131,24 @@ class TensorMultiModal:
             mask=cat_attr("mask"),
         )
 
+    @staticmethod
+    def stack(states: List["TensorMultiModal"], dim=0) -> "TensorMultiModal":
+        
+        def stack_attr(attr_name):
+            attrs = [getattr(s, attr_name, None) for s in states]
+            if all(a is None for a in attrs):
+                return None
+            attrs = [a for a in attrs if a is not None]
+            return torch.stack(attrs, dim=dim)
+
+        return TensorMultiModal(
+            time=stack_attr("time"),
+            continuous=stack_attr("continuous"),
+            discrete=stack_attr("discrete"),
+            mask=stack_attr("mask"),
+        )
+
+
     def available_modes(
         self,
     ) -> List[str]:
