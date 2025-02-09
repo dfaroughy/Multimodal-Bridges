@@ -50,8 +50,8 @@ class AspenOpenJets:
         list_masks = []
         jet_count = 0
 
-        if features['discrete'] == 'onehot':
-            features['continuous'].append('onehot')
+        if features["discrete"] == "onehot":
+            features["continuous"].append("onehot")
 
         for datafile in self.data_files:
             path = os.path.join(self.data_dir, datafile)
@@ -74,7 +74,7 @@ class AspenOpenJets:
                 torch.cat([feats[x] for x in features["continuous"]], dim=-1)
             )
 
-            if features["discrete"]=='tokens':
+            if features["discrete"] == "tokens":
                 list_discrete_feats.append(torch.tensor(feats[features["discrete"]]))
 
             list_masks.append(mask)
@@ -97,6 +97,17 @@ class AspenOpenJets:
 
         mask = torch.cat(list_masks, dim=0)[:num_jets, :max_num_particles, :]
 
+        continuous, discrete, mask, metadata = self._preprocess(
+            continuous, discrete, mask, transform
+        )
+
+        output = TensorMultiModal(None, continuous, discrete, mask)
+        output.apply_mask()
+
+        return output, metadata
+
+    def _preprocess(self, continuous, discrete, mask, transform):
+
         metadata = self._extract_metadata(continuous, mask)
 
         if transform == "standardize":
@@ -111,13 +122,20 @@ class AspenOpenJets:
 
         if transform == "log_pt":
             continuous[:, :, 0] = torch.log(continuous[:, :, 0] + 1e-6)
+            metadata = self._extract_metadata(continuous, mask)
+            mean = torch.tensor(metadata["mean"])
+            std = torch.tensor(metadata["std"])
+            continuous = (continuous - mean) / std
 
-        # create a multimodal tensor output
+        # shuffle particles within jets
 
-        output = TensorMultiModal(None, continuous, discrete, mask)
-        output.apply_mask()
-
-        return output, metadata
+        idx = torch.randperm(continuous.shape[1])
+        continuous = continuous[:, idx, :]
+        if discrete is not None:
+            discrete = discrete[:, idx, :]
+        mask = mask[:, idx, :]
+        
+        return continuous, discrete, mask, metadata
 
     def _read_aoj_file(self, filepath, num_jets=None):
         """Reads and processes a single .h5 file from the AOJ dataset."""
@@ -207,12 +225,11 @@ class AspenOpenJets:
         feats["eta_rel"] = (eta_rel * mask)[:, :, None]
         feats["phi_rel"] = (phi_rel * mask)[:, :, None]
 
-
         d0 = PFCands[:, :, 4]
         d0Err = PFCands[:, :, 5]
         dz = PFCands[:, :, 6]
         dzErr = PFCands[:, :, 7]
-        
+
         feats["d0"] = (d0 * mask)[:, :, None]
         feats["dz"] = (dz * mask)[:, :, None]
         feats["d0Err"] = (d0Err * mask)[:, :, None]
@@ -245,20 +262,21 @@ class AspenOpenJets:
         }
 
 
-
 class AOJDataModule(L.LightningDataModule):
     """DataModule for handling source-target-context coupling for particle cloud data."""
 
     def __init__(
         self,
         config,
-        ):
+    ):
         super().__init__()
 
         self.config = config
         self.transform = config.data.transform
-        self.features = {'continuous': config.data.continuous_features,
-                         'discrete': config.data.discrete_features} 
+        self.features = {
+            "continuous": config.data.continuous_features,
+            "discrete": config.data.discrete_features,
+        }
         self.batch_size = config.data.batch_size
         self.num_workers = config.data.num_workers
         self.pin_memory = config.data.pin_memory
