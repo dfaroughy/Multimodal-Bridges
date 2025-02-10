@@ -51,7 +51,7 @@ class EncoderConfig:
     dim_hidden_local: Optional[int]
     dim_hidden_glob: Optional[int]
     skip_connection: Optional[bool]
-    dropout: Optional[float]
+    dropout: Optional[float] = 0.0
     data_augmentation: Optional[bool] = False
     dim_emb_time: Optional[int] = 0
     dim_emb_continuous: Optional[int] = 0
