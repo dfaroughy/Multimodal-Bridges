@@ -192,7 +192,7 @@ class TelegraphBridge:
         rates = self.rate(state, heads)
         assert (rates >= 0).all(), "Negative rates!"
         state.discrete = state.discrete.squeeze(-1)
-        # max_rate = torch.max(rates, dim=2)[1]
+        max_rate = torch.max(rates, dim=2)[1]
         all_jumps = torch.poisson(rates * delta_t).to(state.time.device)
         jump_mask = torch.sum(all_jumps, dim=-1).type_as(state.discrete) <= 1
         diff = (
@@ -205,7 +205,7 @@ class TelegraphBridge:
         state.discrete += net_jumps * jump_mask
         state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
         state.discrete = state.discrete.unsqueeze(-1)
-        return state
+        return state, max_rate
 
 
 right_shape = lambda x: x if len(x.shape) == 3 else x[:, :, None]
