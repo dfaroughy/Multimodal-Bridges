@@ -32,8 +32,12 @@ class MultiModalBridgeMatching(L.LightningModule):
         if config.data.modality in ["discrete", "multi-modal"]:
             gamma = config.model.gamma
             self.vocab_size = config.data.vocab_size
-            self.bridge_discrete = Bridge[config.model.bridge_discrete](gamma, self.vocab_size)
-            freqs = torch.tensor(config.data.vocab_freq) if config.data.vocab_freq else None
+            self.bridge_discrete = Bridge[config.model.bridge_discrete](
+                gamma, self.vocab_size
+            )
+            freqs = (
+                torch.tensor(config.data.vocab_freq) if config.data.vocab_freq else None
+            )
             self.loss_discrete_fn = nn.CrossEntropyLoss(weight=freqs, reduction="none")
 
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)
@@ -107,17 +111,25 @@ class MultiModalBridgeMatching(L.LightningModule):
             )
 
         source_state = TensorMultiModal(
-            None, batch.source.continuous, batch.source.discrete, batch.source.mask
-        )
+            torch.zeros_like(batch.source.mask),
+            batch.source.continuous,
+            batch.source.discrete,
+            batch.source.mask,
+        ) # t=0
 
         target_state = TensorMultiModal(
-            None, batch.target.continuous, batch.target.discrete, batch.target.mask
+            torch.ones_like(batch.source.mask),
+            batch.target.continuous,
+            batch.target.discrete,
+            batch.target.mask,
+        ) # t=1
+
+        paths = self.simulate_dynamics(source_state, batch)  # still preprocessed!
+
+        return (
+            paths.detach().cpu(),
+            target_state.detach().cpu(),
         )
-
-        initial_state = source_state.clone()
-        final_state = self.simulate_dynamics(initial_state, batch)
-
-        return final_state, source_state.detach().cpu(), target_state.detach().cpu()
 
     def configure_optimizers(self):
         optimizer = Optimizer[self.config.trainer.optimizer_name](
@@ -154,7 +166,9 @@ class MultiModalBridgeMatching(L.LightningModule):
             logits = heads.discrete.transpose(1, 2)
             targets = batch.target.discrete.squeeze(-1).to(self.device)
 
-            loss_ce = self.loss_discrete_fn(logits, targets.long()).unsqueeze(-1) * state.mask 
+            loss_ce = (
+                self.loss_discrete_fn(logits, targets.long()).unsqueeze(-1) * state.mask
+            )
             loss_discrete = loss_ce.sum() / state.mask.sum()
 
         return loss_continuous, loss_discrete
@@ -207,7 +221,9 @@ class MultiModalBridgeMatching(L.LightningModule):
         time_steps = torch.linspace(eps, 1.0 - eps, steps, device=self.device)
         delta_t = (time_steps[-1] - time_steps[0]) / (len(time_steps) - 1)
 
-        for t in time_steps[1:]:
+        paths = [state.clone()]
+
+        for i, t in enumerate(time_steps):
             state.time = torch.full((len(batch), 1), t.item(), device=self.device)
             heads = self.forward(state, batch)
 
@@ -215,12 +231,20 @@ class MultiModalBridgeMatching(L.LightningModule):
                 state = self.bridge_continuous.forward_step(state, heads, delta_t)
 
             if heads.has_discrete:
-                state = self.bridge_discrete.forward_step(state, heads, delta_t)
+                state, max_rate = self.bridge_discrete.forward_step(
+                    state, heads, delta_t
+                )
 
-        state.time = state.time.unsqueeze(1).repeat(1, state.shape[-1], 1)
-        state.apply_mask()
+            state.time = state.time.unsqueeze(1).repeat(1, state.shape[-1], 1)
 
-        return state.detach().cpu()
+            paths.append(state.clone())
+
+        state.discrete = max_rate.unsqueeze(
+            -1
+        )  # replace last timestep with argmax rate
+        paths.append(state)
+        paths = TensorMultiModal.stack(paths, dim=0)
+        return paths
 
     def reshape_time_dim_like(self, t, state: Union[TensorMultiModal, DataCoupling]):
         if isinstance(t, (float, int)):

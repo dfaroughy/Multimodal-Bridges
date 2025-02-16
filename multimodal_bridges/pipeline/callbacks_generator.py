@@ -21,8 +21,7 @@ class JetGeneratorCallback(Callback):
 
         self.config = config
         self.transform = config.data.transform
-        self.batched_gen_states = []
-        self.batched_source_states = []
+        self.batched_paths = []
         self.batched_target_states = []
 
     def on_predict_start(self, trainer, pl_module):
@@ -35,9 +34,8 @@ class JetGeneratorCallback(Callback):
 
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
-            self.batched_gen_states.append(outputs[0])
-            self.batched_source_states.append(outputs[1])
-            self.batched_target_states.append(outputs[2])
+            self.batched_paths.append(outputs[0])
+            self.batched_target_states.append(outputs[1])
 
     def on_predict_end(self, trainer, pl_module):
         rank = trainer.global_rank
@@ -55,37 +53,31 @@ class JetGeneratorCallback(Callback):
 
     def _save_results_local(self, rank):
         random = np.random.randint(0, 1000)
-
-        src_raw = TensorMultiModal.cat(self.batched_source_states)
-        gen_raw = TensorMultiModal.cat(self.batched_gen_states)
-        test_raw = TensorMultiModal.cat(self.batched_target_states)
-
-        src_raw.save_to(f"{self.data_dir}/temp_src_{rank}_{random}.h5")
-        gen_raw.save_to(f"{self.data_dir}/temp_gen_{rank}_{random}.h5")
-        test_raw.save_to(f"{self.data_dir}/temp_test_{rank}_{random}.h5")
+        paths = TensorMultiModal.cat(self.batched_paths, dim=1)
+        paths.save_to(f"{self.data_dir}/temp_paths_{rank}_{random}.h5")
+        test = TensorMultiModal.cat(self.batched_target_states)
+        test.save_to(f"{self.data_dir}/temp_test_{rank}_{random}.h5")
 
     @rank_zero_only
     def _gather_results_global(self, trainer):
-        src_files = self.data_dir.glob("temp_src_*_*.h5")
-        gen_files = self.data_dir.glob("temp_gen_*_*.h5")
+
+        paths_files = self.data_dir.glob("temp_paths_*_*.h5")
         test_files = self.data_dir.glob("temp_test_*_*.h5")
 
-        src_states = [TensorMultiModal.load_from(str(f)) for f in src_files]
-        src_merged = TensorMultiModal.cat(src_states)
-        src_merged = self._postprocess(src_merged, transform=None)
-        src_merged.save_to(f"{self.data_dir}/source_sample.h5")
+        paths_list = [TensorMultiModal.load_from(str(f)) for f in paths_files]
+        # for paths in paths_list:
+        #     print(paths.time.shape ,paths.continuous.shape, paths.discrete.shape, paths.mask.shape)
+        paths = TensorMultiModal.cat(paths_list, dim=1)
+        paths = self._postprocess(paths, transform=self.transform)
+        paths.save_to(f"{self.data_dir}/paths_sample.h5")
+        gen_states = paths[-1] 
+        gen_jets = JetFeatures(gen_states)
 
-        gen_states = [TensorMultiModal.load_from(str(f)) for f in gen_files]
-        gen_merged = TensorMultiModal.cat(gen_states)
-        gen_merged = self._postprocess(gen_merged, transform=self.transform)
-        gen_merged.save_to(f"{self.data_dir}/generated_sample.h5")
-        gen_jets = JetFeatures(gen_merged)
-
-        test_states = [TensorMultiModal.load_from(str(f)) for f in test_files]
-        test_merged = TensorMultiModal.cat(test_states)
-        test_merged = self._postprocess(test_merged, transform=None)
-        test_merged.save_to(f"{self.data_dir}/test_sample.h5")
-        test_jets = JetFeatures(test_merged)
+        test_list = [TensorMultiModal.load_from(str(f)) for f in test_files]
+        test = TensorMultiModal.cat(test_list)
+        test = self._postprocess(test, transform=None)
+        test.save_to(f"{self.data_dir}/test_sample.h5")
+        test_jets = JetFeatures(test)
 
         metrics = self.compute_performance_metrics(gen_jets, test_jets)
 
@@ -100,38 +92,36 @@ class JetGeneratorCallback(Callback):
                 f"{self.metric_dir}/performance_metrics.csv", df
             )
 
-        # with open(self.metric_dir / "performance_metrics.json", "w") as f:
-        #     json.dump(metrics, f, indent=4)
-
-    def _postprocess(self, x: TensorMultiModal, transform=None):
+    def _postprocess(self, paths: TensorMultiModal, transform=None):
         metadata = self._load_metadata(self.config.path)
 
         if transform == "standardize":
             mean = torch.tensor(metadata["target"]["mean"])
             std = torch.tensor(metadata["target"]["std"])
-            x.continuous = x.continuous * std + mean
+            paths.continuous = paths.continuous * std + mean
 
         elif transform == "normalize":
             min_val = torch.tensor(metadata["target"]["min"])
             max_val = torch.tensor(metadata["target"]["max"])
-            x.continuous = x.continuous * (max_val - min_val) + min_val
+            paths.continuous = paths.continuous * (max_val - min_val) + min_val
 
         if transform == "log_pt":
-            x.continuous[:, :, 0] = torch.exp(x.continuous[:, :, 0]) - 1e-6
+            mean = torch.tensor(metadata["target"]["mean"])
+            std = torch.tensor(metadata["target"]["std"])
+            paths.continuous = paths.continuous * std + mean
+            paths.continuous[:, :, 0] = torch.exp(paths.continuous[:, :, 0]) - 1e-6
 
         if self.config.data.discrete_features == "onehot":
-            x.discrete = x.continuous[:, :, -self.config.data.vocab_size :]
-            x.continuous = x.continuous[:, :, : -self.config.data.vocab_size]
-            x.discrete = torch.argmax(x.discrete, dim=-1).unsqueeze(-1)
+            paths.discrete = paths.continuous[:, :, -self.config.data.vocab_size :]
+            paths.continuous = paths.continuous[:, :, : -self.config.data.vocab_size]
+            paths.discrete = torch.argmax(paths.discrete, dim=-1).unsqueeze(-1)
 
-        x.apply_mask()
+        paths.apply_mask()
 
-        return x
+        return paths
 
     def _clean_temp_files(self):
-        for f in self.data_dir.glob("temp_src_*_*.h5"):
-            f.unlink()
-        for f in self.data_dir.glob("temp_gen_*_*.h5"):
+        for f in self.data_dir.glob("temp_paths_*_*.h5"):
             f.unlink()
         for f in self.data_dir.glob("temp_test_*_*.h5"):
             f.unlink()

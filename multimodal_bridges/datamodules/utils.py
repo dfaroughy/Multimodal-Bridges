@@ -44,27 +44,58 @@ class ParticleClouds:
         if self.has_displaced_vertex:
             self.d0 = self.continuous[..., 3]
             self.d0Err = self.continuous[..., 4]
-            self.dz = self.continuous[..., 5] 
+            self.dz = self.continuous[..., 5]
             self.dzErr = self.continuous[..., 6]
-            self.d0_ratio = np.divide(self.d0, self.d0Err, out=np.zeros_like(self.d0), where=self.d0Err!=0)
-            self.dz_ratio = np.divide(self.dz, self.dzErr, out=np.zeros_like(self.dz), where=self.dzErr!=0)
+            self.d0_ratio = np.divide(
+                self.d0, self.d0Err, out=np.zeros_like(self.d0), where=self.d0Err != 0
+            )
+            self.dz_ratio = np.divide(
+                self.dz, self.dzErr, out=np.zeros_like(self.dz), where=self.dzErr != 0
+            )
 
         if self.data.has_discrete:
-            self._flavored_kinematics("Photon", selection=self.discrete.squeeze(-1) == 0)
-            self._flavored_kinematics("NeutralHadron", selection=self.discrete.squeeze(-1) == 1)
-            self._flavored_kinematics("NegativeHadron", selection=self.discrete.squeeze(-1) == 2)
-            self._flavored_kinematics("PositiveHadron", selection=self.discrete.squeeze(-1) == 3)
-            self._flavored_kinematics("Electron", selection=self.discrete.squeeze(-1) == 4)
-            self._flavored_kinematics("Positron", selection=self.discrete.squeeze(-1) == 5)
+            self._flavored_kinematics(
+                "Photon", selection=self.discrete.squeeze(-1) == 0
+            )
+            self._flavored_kinematics(
+                "NeutralHadron", selection=self.discrete.squeeze(-1) == 1
+            )
+            self._flavored_kinematics(
+                "NegativeHadron", selection=self.discrete.squeeze(-1) == 2
+            )
+            self._flavored_kinematics(
+                "PositiveHadron", selection=self.discrete.squeeze(-1) == 3
+            )
+            self._flavored_kinematics(
+                "Electron", selection=self.discrete.squeeze(-1) == 4
+            )
+            self._flavored_kinematics(
+                "Positron", selection=self.discrete.squeeze(-1) == 5
+            )
             self._flavored_kinematics("Muon", selection=self.discrete.squeeze(-1) == 6)
-            self._flavored_kinematics("AntiMuon", selection=self.discrete.squeeze(-1) == 7)
-            self._flavored_kinematics("ChargedHadron", selection=(self.discrete.squeeze(-1) == 2) | (self.discrete.squeeze(-1) == 3))
-            self._flavored_kinematics("Electrons", selection=(self.discrete.squeeze(-1) == 4) | (self.discrete.squeeze(-1) == 5))
-            self._flavored_kinematics("Muons", selection=(self.discrete.squeeze(-1) == 6) | (self.discrete.squeeze(-1) == 7))
-            self._flavored_kinematics("Lepton", selection=(self.discrete.squeeze(-1) > 3))
+            self._flavored_kinematics(
+                "AntiMuon", selection=self.discrete.squeeze(-1) == 7
+            )
+            self._flavored_kinematics(
+                "ChargedHadron",
+                selection=(self.discrete.squeeze(-1) == 2)
+                | (self.discrete.squeeze(-1) == 3),
+            )
+            self._flavored_kinematics(
+                "Electrons",
+                selection=(self.discrete.squeeze(-1) == 4)
+                | (self.discrete.squeeze(-1) == 5),
+            )
+            self._flavored_kinematics(
+                "Muons",
+                selection=(self.discrete.squeeze(-1) == 6)
+                | (self.discrete.squeeze(-1) == 7),
+            )
+            self._flavored_kinematics(
+                "Lepton", selection=(self.discrete.squeeze(-1) > 3)
+            )
 
     def _flavored_kinematics(self, name, selection):
-        
         setattr(self, f"is{name}", selection * self.mask_bool)
         setattr(self, f"num_{name}", torch.sum(getattr(self, f"is{name}"), dim=1))
         setattr(self, f"pt_{name}", self.pt[getattr(self, f"is{name}")])
@@ -87,7 +118,7 @@ class ParticleClouds:
         if self.data.has_continuous:
             return True
         return False
-    
+
     @property
     def has_discrete(self):
         if self.data.has_discrete:
@@ -97,7 +128,7 @@ class ParticleClouds:
     def histplot(
         self,
         feature="pt",
-        apply_map='mask_bool',
+        apply_map="mask_bool",
         xlim=None,
         ylim=None,
         xlabel=None,
@@ -110,14 +141,14 @@ class ParticleClouds:
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
 
-        x = getattr(self, feature) 
+        x = getattr(self, feature)
 
-        if apply_map == 'mask_bool':
+        if apply_map == "mask_bool":
             x = x[self.mask_bool]
 
         elif apply_map is not None:
             x = apply_map(x)
-        
+
         if isinstance(x, torch.Tensor):
             x.detach().cpu().numpy()
 
@@ -131,137 +162,241 @@ class ParticleClouds:
         ax.set_ylim(ylim)
 
     def display_cloud(
-            jets,
-            idx,
-            scale_marker=1.0,
-            ax=None,
-            figsize=(3.2, 3),
-            facecolor="whitesmoke",
-            title_box_anchor=(1.025, 1.125),
-            savefig=None,
-            legend=False
-        ):
-            eta =  jets.eta_rel[idx]
-            phi =  jets.phi_rel[idx]
-            pt = jets.pt[idx] * scale_marker
-            N = jets.mask[idx].squeeze(-1).sum().item()
+        jets,
+        idx,
+        scale_marker=1.0,
+        ax=None,
+        figsize=(3.2, 3),
+        facecolor="whitesmoke",
+        color={
+            "e": "firebrick",
+            "mu": "hotpink",
+            "h": "blue",
+            "h0": "forestgreen",
+            "a": "gold",
+        },
+        title=None,
+        title_box_anchor=(1.025, 1.125),
+        savefig=None,
+        legend=False,
+        display_N=False,
+        xlim=None,
+        ylim=None,
+        alpha=0.5,
+        xticks=[],
+        yticks=[], 
+        edgecolor=None,
+    ):
+        eta = jets.eta_rel[idx]
+        phi = jets.phi_rel[idx]
+        pt = jets.pt[idx] * scale_marker
+        N = jets.mask[idx].squeeze(-1).sum().item()
 
-            if ax is None:
-                _, ax = plt.subplots(figsize=figsize)
+        if ax is None:
+            _, ax = plt.subplots(figsize=figsize)
 
-            ax.scatter(
-                eta[jets.isPhoton[idx]],
-                phi[jets.isPhoton[idx]],
-                marker="o",
-                s=pt[jets.isPhoton[idx]],
-                color="gold",
-                alpha=0.5,
-                label=r"$\gamma$",
-            )
-            ax.scatter(
-                eta[jets.isNeutralHadron[idx]],
-                phi[jets.isNeutralHadron[idx]],
-                marker="o",
-                s=pt[jets.isNeutralHadron[idx]],
-                color="forestgreen",
-                alpha=0.5,
-                label=r"$h^{0}$",
-            )
-            ax.scatter(
-                eta[jets.isNegativeHadron[idx]],
-                phi[jets.isNegativeHadron[idx]],
-                marker="^",
-                s=pt[jets.isNegativeHadron[idx]],
-                color="blue",
-                alpha=0.5,
-                label=r"$h^{-}$",
-            )
-            ax.scatter(
-                eta[jets.isPositiveHadron[idx]],
-                phi[jets.isPositiveHadron[idx]],
-                marker="v",
-                s=pt[jets.isPositiveHadron[idx]],
-                color="blue",
-                alpha=0.5,
-                label=r"$h^{+}$",
-            )
-            ax.scatter(
-                eta[jets.isElectron[idx]],
-                phi[jets.isElectron[idx]],
-                marker="^",
-                s=pt[jets.isElectron[idx]],
-                color="firebrick",
-                alpha=0.5,
-                label=r"$e^{-}$",
-            )
-            ax.scatter(
-                eta[jets.isPositron[idx]],
-                phi[jets.isPositron[idx]],
-                marker="v",
-                s=pt[jets.isPositron[idx]],
-                color="firebrick",
-                alpha=0.5,
-                label=r"$e^{+}$",
-            )
-            ax.scatter(
-                eta[jets.isMuon[idx]],
-                phi[jets.isMuon[idx]],
-                marker="^",
-                s=pt[jets.isMuon[idx]],
-                color="hotpink",
-                alpha=0.5,
-                label=r"$\mu^{-}$",
-            )
-            ax.scatter(
-                eta[jets.isAntiMuon[idx]],
-                phi[jets.isAntiMuon[idx]],
-                marker="v",
-                s=pt[jets.isAntiMuon[idx]],
-                color="hotpink",
-                alpha=0.5,
-                label=r"$\mu^{+}$",
+        ax.scatter(
+            eta[jets.isPhoton[idx]],
+            phi[jets.isPhoton[idx]],
+            marker="o",
+            s=pt[jets.isPhoton[idx]],
+            color=color["a"],
+            alpha=alpha,
+            label=r"$\gamma$",
+            edgecolors=edgecolor,
+        )
+        ax.scatter(
+            eta[jets.isNeutralHadron[idx]],
+            phi[jets.isNeutralHadron[idx]],
+            marker="o",
+            s=pt[jets.isNeutralHadron[idx]],
+            color=color["h0"],
+            alpha=alpha,
+            label=r"$h^{0}$",
+            edgecolors=edgecolor,
+        )
+        ax.scatter(
+            eta[jets.isNegativeHadron[idx]],
+            phi[jets.isNegativeHadron[idx]],
+            marker="^",
+            s=pt[jets.isNegativeHadron[idx]],
+            color=color["h"],
+            alpha=alpha,
+            label=r"$h^{-}$",
+            edgecolors=edgecolor,
+
+        )
+        ax.scatter(
+            eta[jets.isPositiveHadron[idx]],
+            phi[jets.isPositiveHadron[idx]],
+            marker="v",
+            s=pt[jets.isPositiveHadron[idx]],
+            color=color["h"],
+            alpha=alpha,
+            label=r"$h^{+}$",
+            edgecolors=edgecolor,
+        )
+        ax.scatter(
+            eta[jets.isElectron[idx]],
+            phi[jets.isElectron[idx]],
+            marker="^",
+            s=pt[jets.isElectron[idx]],
+            color=color["e"],
+            alpha=alpha,
+            label=r"$e^{-}$",
+            edgecolors=edgecolor,
+
+        )
+        ax.scatter(
+            eta[jets.isPositron[idx]],
+            phi[jets.isPositron[idx]],
+            marker="v",
+            s=pt[jets.isPositron[idx]],
+            color=color["e"],
+            alpha=alpha,
+            label=r"$e^{+}$",
+            edgecolors=edgecolor,
+        )
+        ax.scatter(
+            eta[jets.isMuon[idx]],
+            phi[jets.isMuon[idx]],
+            marker="^",
+            s=pt[jets.isMuon[idx]],
+            color=color["mu"],
+            alpha=alpha,
+            label=r"$\mu^{-}$",
+            edgecolors=edgecolor,
+        )
+        ax.scatter(
+            eta[jets.isAntiMuon[idx]],
+            phi[jets.isAntiMuon[idx]],
+            marker="v",
+            s=pt[jets.isAntiMuon[idx]],
+            color=color["mu"],
+            alpha=alpha,
+            label=r"$\mu^{+}$",
+            edgecolors=edgecolor,
+        )
+
+        # Define custom legend markers
+        h1 = Line2D(
+            [0],
+            [0],
+            marker="o",
+            markersize=6,
+            alpha=0.5,
+            color="gold",
+            linestyle="None",
+        )
+        h2 = Line2D(
+            [0],
+            [0],
+            marker="o",
+            markersize=6,
+            alpha=0.5,
+            color="forestgreen",
+            linestyle="None",
+         
+        )
+        h3 = Line2D(
+            [0],
+            [0],
+            marker="^",
+            markersize=6,
+            alpha=0.5,
+            color="blue",
+            linestyle="None",
+  
+        )
+        h4 = Line2D(
+            [0],
+            [0],
+            marker="v",
+            markersize=6,
+            alpha=0.5,
+            color="blue",
+            linestyle="None",
+        )
+        h5 = Line2D(
+            [0],
+            [0],
+            marker="^",
+            markersize=6,
+            alpha=0.5,
+            color="firebrick",
+            linestyle="None",
+        )
+        h6 = Line2D(
+            [0],
+            [0],
+            marker="v",
+            markersize=6,
+            alpha=0.5,
+            color="firebrick",
+            linestyle="None",
+        )
+        h7 = Line2D(
+            [0],
+            [0],
+            marker="^",
+            markersize=6,
+            alpha=0.5,
+            color="hotpink",
+            linestyle="None",
+        )
+        h8 = Line2D(
+            [0],
+            [0],
+            marker="v",
+            markersize=6,
+            alpha=0.5,
+            color="hotpink",
+            linestyle="None",
+        )
+
+        if legend:
+            ax.legend(
+                [h1, h2, h3, h4, h5, h6, h7, h8],
+                [
+                    r"$\gamma$",
+                    r"$h^0$",
+                    r"$h^-$",
+                    r"$h^+$",
+                    r"$e^-$",
+                    r"$e^+$",
+                    r"$\mu^{-}$",
+                    r"$\mu^{+}$",
+                ],
+                loc="center left",
+                bbox_to_anchor=(0.5, -0.25),
+                markerscale=2,
+                scatterpoints=1,
+                fontsize=14,
+                frameon=False,
+                ncols=8,
+                handletextpad=0.5,
+                columnspacing=1.0,
             )
 
-            # Define custom legend markers
-            h1 = Line2D([0], [0], marker="o", markersize=6, alpha=0.5, color="gold", linestyle="None")
-            h2 = Line2D([0], [0], marker="o", markersize=6, alpha=0.5, color="forestgreen", linestyle="None")
-            h3 = Line2D([0], [0], marker="^", markersize=6, alpha=0.5, color="blue", linestyle="None")
-            h4 = Line2D([0], [0], marker="v", markersize=6, alpha=0.5, color="blue", linestyle="None")
-            h5 = Line2D([0], [0], marker="^", markersize=6, alpha=0.5, color="firebrick", linestyle="None")
-            h6 = Line2D([0], [0], marker="v", markersize=6, alpha=0.5, color="firebrick", linestyle="None")
-            h7 = Line2D([0], [0], marker="^", markersize=6, alpha=0.5, color="hotpink", linestyle="None")
-            h8 = Line2D([0], [0], marker="v", markersize=6, alpha=0.5, color="hotpink", linestyle="None")
+        ax.set_xticks(xticks)
+        ax.set_yticks(yticks)
 
-            if legend:
-                ax.legend(
-                    [h1, h2, h3, h4, h5, h6, h7, h8],
-                    [r"$\gamma$", r"$h^0$", r"$h^-$", r"$h^+$", r"$e^-$", r"$e^+$", r"$\mu^{-}$", r"$\mu^{+}$"],
-                    loc="center left",        
-                    bbox_to_anchor=(1.05, 0.5),   
-                    markerscale=2,
-                    scatterpoints=1,
-                    fontsize=12,
-                    frameon=False,
-                    ncol=1,   
-                    handletextpad=0.5,
-                    columnspacing=1.0,
-                )
-
-            ax.set_xticks([])
-            ax.set_yticks([])
+        if xlim:
+            ax.set_xlim(*xlim)
+        if ylim:
+            ax.set_ylim(*ylim)
+        ax.set_title(title, fontsize=14)
+        if display_N:
             ax.text(
                 0.975,
                 0.975,
-                fr"$N={N}$",
+                rf"$N={N}$",
                 fontsize=14,
                 ha="right",
                 va="top",
                 transform=ax.transAxes,
             )
-            ax.set_facecolor(facecolor)  # Set the axis background color
-
-
-
+        ax.set_facecolor(facecolor)  # Set the axis background color
 
 @dataclass
 class JetFeatures:
@@ -334,7 +469,7 @@ class JetFeatures:
 
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
-            
+
         sns.histplot(x=x, element="step", ax=ax, **kwargs)
         ax.set_xlabel(
             "jet-level " + features if xlabel is None else xlabel,
@@ -419,8 +554,6 @@ class JetFeatures:
         figsize=(3, 2),
         label=None,
     ):
-
-
         if ax is None:
             _, ax = plt.subplots(figsize=figsize)
 
@@ -429,7 +562,7 @@ class JetFeatures:
         std = count.std(dim=0).cpu().numpy().tolist()
 
         if isinstance(color, str):
-            color = [color] * len(mean) 
+            color = [color] * len(mean)
 
         labels = [
             r"$\gamma$",
