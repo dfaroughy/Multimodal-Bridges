@@ -27,7 +27,7 @@ class MultiModalEPiC(nn.Module):
             + config.encoder.dim_emb_context_discrete * config.data.dim_context_discrete
         )
 
-        self.multimode_epic = EPiCEncoderFactorized(
+        self.multimode_epic = EPiCEncoder(
             dim_time=config.encoder.dim_emb_time,
             dim_input=dim_input,
             dim_output_continuous=config.data.dim_continuous,
@@ -82,111 +82,6 @@ class EPiCEncoder(nn.Module):
 
         # ...body network:
 
-        self.epic_proj = EPiCProjection(
-            dim_time=dim_time,
-            dim_loc=dim_input,
-            dim_glob=dim_context,
-            dim_hid_loc=dim_hid_loc,
-            dim_hid_glob=dim_hid_glob,
-            pooling_fn=self._meansum_pool,
-            dropout=dropout,
-        )
-
-        self.epic_layers = nn.ModuleList()
-
-        for _ in range(self.num_blocks):
-            self.epic_layers.append(
-                EPiCLayer(
-                    dim_loc=dim_hid_loc,
-                    dim_glob=dim_hid_glob,
-                    dim_hid=dim_hid_loc,
-                    dim_cond=dim_context,
-                    pooling_fn=self._meansum_pool,
-                    dropout=dropout,
-                )
-            )
-
-        self.output_layer = wn(
-            nn.Linear(dim_time + dim_hid_loc + dim_hid_glob, dim_hid_loc)
-        )
-
-        # ...mode heads:
-
-        self.continuous_head = nn.Sequential(
-            wn(nn.Linear(dim_time + dim_hid_loc // 2, dim_hid_loc // 2)),
-            nn.GELU(),
-            wn(nn.Linear(dim_hid_loc // 2, dim_output_continuous)),
-            nn.Dropout(dropout),
-        )
-
-        self.discrete_head = nn.Sequential(
-            wn(nn.Linear(dim_time + dim_hid_loc // 2, dim_hid_loc // 2)),
-            nn.GELU(),
-            wn(nn.Linear(dim_hid_loc // 2, dim_output_discrete)),
-            nn.Dropout(dropout),
-        )
-
-    def forward(self, time_local, x_local, context=None, mask=None):
-        # ...Projection network:
-        x_local, x_global = self.epic_proj(time_local, x_local, context, mask)
-        x_local_skip = x_local.clone() if self.use_skip_connection else 0
-        x_global_skip = x_global.clone() if self.use_skip_connection else 0
-
-        # ...EPiC layers:
-        for i in range(self.num_blocks):
-            x_local, x_global = self.epic_layers[i](x_local, x_global, context, mask)
-            x_local += x_local_skip
-            x_global += x_global_skip
-
-        # ... final layer
-        x_global = self._broadcast_global(x_global, local=x_local)
-        h = torch.cat([time_local, x_local, x_global], dim=-1)
-        h = self.output_layer(h)
-
-        # ...output heads:
-        h1, h2 = torch.tensor_split(x_local, 2, dim=-1)
-        h_continuous = self.continuous_head(torch.cat([time_local, h1], dim=-1))
-        h_discrete = self.discrete_head(torch.cat([time_local, h2], dim=-1))
-
-        return h_continuous * mask, h_discrete * mask  # [batch, points, feats]
-
-    def _meansum_pool(self, mask, x_local, *x_global, scale=0.01):
-        """masked pooling local features with mean and sum
-        the concat with global features
-        """
-        x_sum = (x_local * mask).sum(1, keepdim=False)
-        x_mean = x_sum / mask.sum(1, keepdim=False)
-        x_pool = torch.cat([x_mean, x_sum * scale, *x_global], 1)
-        return x_pool
-
-    def _broadcast_global(self, x, local):
-        dim = x.size(1)
-        D = local.size(1)
-        return x.view(-1, 1, dim).repeat(1, D, 1)
-
-
-class EPiCEncoderFactorized(nn.Module):
-    def __init__(
-        self,
-        dim_time: int,
-        dim_input: int,
-        dim_output_continuous: int = 3,
-        dim_output_discrete: int = 0,
-        dim_context: int = 0,
-        num_blocks: int = 6,
-        dim_hid_loc: int = 128,
-        dim_hid_glob: int = 10,
-        use_skip_connection: bool = False,
-        dropout: float = 0.0,
-    ):
-        super().__init__()
-
-        # ...model params:
-        self.num_blocks = num_blocks
-        self.use_skip_connection = use_skip_connection
-
-        # ...body network:
-
         self.epic_body = EPiCProjection(
             dim_time=dim_time,
             dim_loc=dim_input,
@@ -200,7 +95,7 @@ class EPiCEncoderFactorized(nn.Module):
         # ...mode heads:
 
         self.epic_continuous_head = nn.ModuleList()
-        self.epic_discrete_head = nn.ModuleList()
+        self.epic_dsicrete_head = nn.ModuleList()
 
         for _ in range(self.num_blocks):
             self.epic_continuous_head.append(
@@ -213,6 +108,8 @@ class EPiCEncoderFactorized(nn.Module):
                     dropout=dropout,
                 )
             )
+
+        for _ in range(self.num_blocks):
             self.epic_discrete_head.append(
                 EPiCLayer(
                     dim_loc=dim_hid_loc,
@@ -242,16 +139,12 @@ class EPiCEncoderFactorized(nn.Module):
 
         # ...heads:
 
-        h_loc = torch.tensor_split(z_local, 2, dim=-1)    
-        x_local, k_local = h_loc[0].clone(), h_loc[1].clone()
-
-        h_glob = torch.tensor_split(z_global, 2, dim=-1)
-        x_global, k_global = h_glob[0].clone(), h_glob[1].clone()
+        x_local, k_local = torch.tensor_split(z_local, 2, dim=-1)
+        x_global, k_global = torch.tensor_split(z_global, 2, dim=-1)
 
         x_local_skip = x_local.clone() if self.use_skip_connection else 0
+        k_local_skip = k_global.clone() if self.use_skip_connection else 0
         x_global_skip = x_global.clone() if self.use_skip_connection else 0
-
-        k_local_skip = k_local.clone() if self.use_skip_connection else 0
         k_global_skip = k_global.clone() if self.use_skip_connection else 0
 
         for i in range(self.num_blocks):
@@ -288,7 +181,6 @@ class EPiCEncoderFactorized(nn.Module):
         dim = x.size(1)
         D = local.size(1)
         return x.view(-1, 1, dim).repeat(1, D, 1)
-
 
 
 class EPiCProjection(nn.Module):

@@ -186,6 +186,7 @@ class ParticleClouds:
         xticks=[],
         yticks=[], 
         edgecolor=None,
+        lw=0.75
     ):
         eta = jets.eta_rel[idx]
         phi = jets.phi_rel[idx]
@@ -204,6 +205,7 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$\gamma$",
             edgecolors=edgecolor,
+            linewidth=lw,
         )
         ax.scatter(
             eta[jets.isNeutralHadron[idx]],
@@ -214,6 +216,8 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$h^{0}$",
             edgecolors=edgecolor,
+            linewidth=lw,
+
         )
         ax.scatter(
             eta[jets.isNegativeHadron[idx]],
@@ -224,6 +228,8 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$h^{-}$",
             edgecolors=edgecolor,
+            linewidth=lw,
+
 
         )
         ax.scatter(
@@ -235,6 +241,8 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$h^{+}$",
             edgecolors=edgecolor,
+            linewidth=lw,
+
         )
         ax.scatter(
             eta[jets.isElectron[idx]],
@@ -245,6 +253,7 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$e^{-}$",
             edgecolors=edgecolor,
+            linewidth=lw,
 
         )
         ax.scatter(
@@ -256,6 +265,7 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$e^{+}$",
             edgecolors=edgecolor,
+            linewidth=lw,
         )
         ax.scatter(
             eta[jets.isMuon[idx]],
@@ -266,6 +276,7 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$\mu^{-}$",
             edgecolors=edgecolor,
+            linewidth=lw,
         )
         ax.scatter(
             eta[jets.isAntiMuon[idx]],
@@ -276,6 +287,7 @@ class ParticleClouds:
             alpha=alpha,
             label=r"$\mu^{+}$",
             edgecolors=edgecolor,
+            linewidth=lw,
         )
 
         # Define custom legend markers
