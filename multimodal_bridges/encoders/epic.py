@@ -27,7 +27,7 @@ class MultiModalEPiC(nn.Module):
             + config.encoder.dim_emb_context_discrete * config.data.dim_context_discrete
         )
 
-        self.multimode_epic = EPiCEncoderFactorized(
+        self.multimode_epic = EPiCEncoder(
             dim_time=config.encoder.dim_emb_time,
             dim_input=dim_input,
             dim_output_continuous=config.data.dim_continuous,
@@ -60,6 +60,61 @@ class MultiModalEPiC(nn.Module):
         return TensorMultiModal(None, head_continuous, head_discrete, mask)
 
 
+class MultiModalFusedEPiC(nn.Module):
+    """Permutation equivariant architecture for multi-modal continuous-discrete models"""
+
+    def __init__(self, config):
+        super().__init__()
+
+        self.config = config
+        aug_factor = 2 if config.encoder.data_augmentation else 1
+
+        dim_input = (
+            config.encoder.dim_emb_time
+            + config.encoder.dim_emb_continuous
+            + config.encoder.dim_emb_discrete * config.data.dim_discrete * aug_factor
+        )
+
+        dim_context = (
+            config.encoder.dim_emb_time
+            + config.encoder.dim_emb_context_continuous
+            + config.encoder.dim_emb_context_discrete * config.data.dim_context_discrete
+        )
+
+        self.multimode_epic = EPiCEncoderFused(
+            dim_time=config.encoder.dim_emb_time,
+            dim_input=dim_input,
+            dim_output_continuous=config.data.dim_continuous,
+            dim_output_discrete=config.data.vocab_size * config.data.dim_discrete,
+            dim_context=dim_context,
+            num_blocks=config.encoder.num_blocks,
+            dim_hid_loc=config.encoder.dim_hidden_local,
+            dim_hid_glob=config.encoder.dim_hidden_glob,
+            use_skip_connection=config.encoder.skip_connection,
+            dropout=config.encoder.dropout,
+        )
+
+    def forward(
+        self, state_local: TensorMultiModal, state_global: TensorMultiModal
+    ) -> TensorMultiModal:
+        local_modes = [
+            getattr(state_local, mode) for mode in state_local.available_modes()
+        ]
+        global_modes = [
+            getattr(state_global, mode) for mode in state_global.available_modes()
+        ]
+
+        local_cat = torch.cat(local_modes, dim=-1)
+        global_cat = torch.cat(global_modes, dim=-1)
+
+        mask = state_local.mask
+        head_continuous, head_discrete = self.multimode_epic(
+            state_local.time, local_cat, global_cat, mask
+        )
+        return TensorMultiModal(None, head_continuous, head_discrete, mask)
+
+
+
 class EPiCEncoder(nn.Module):
     def __init__(
         self,
@@ -80,8 +135,7 @@ class EPiCEncoder(nn.Module):
         self.num_blocks = num_blocks
         self.use_skip_connection = use_skip_connection
 
-        # ...body network:
-
+        # ...components:
         self.epic_proj = EPiCProjection(
             dim_time=dim_time,
             dim_loc=dim_input,
@@ -165,7 +219,7 @@ class EPiCEncoder(nn.Module):
         return x.view(-1, 1, dim).repeat(1, D, 1)
 
 
-class EPiCEncoderFactorized(nn.Module):
+class EPiCEncoderFused(nn.Module):
     def __init__(
         self,
         dim_time: int,
