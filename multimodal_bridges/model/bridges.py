@@ -157,7 +157,6 @@ class TelegraphBridge:
         k = (
             k[None, None, :].repeat(k0.size(0), k0.size(1), 1).float()
         )  # shape: (B, N, vocab_size)
-        # k = k.expand(k0.size(0), k0.size(1), -1)  # shape: (B, N, vocab_size)
         k = k.to(k0.device)
 
         # ...compute probabilities:
@@ -187,23 +186,26 @@ class TelegraphBridge:
         prob = 1.0 / S + w_t[:, None, None] * ((-1.0 / S) + kronecker)
         return prob
 
-    def forward_step(self, state, heads, delta_t):
-        """tau-leaping step for master equation solver"""
+    def forward_step(self, state, heads, delta_t, overflow='clamp'):
+        """tau-leaping step for approx master equation solver"""
         rates = self.rate(state, heads)
         assert (rates >= 0).all(), "Negative rates!"
         state.discrete = state.discrete.squeeze(-1)
         max_rate = torch.max(rates, dim=2)[1]
-        all_jumps = torch.poisson(rates * delta_t).to(state.time.device)
-        jump_mask = torch.sum(all_jumps, dim=-1).type_as(state.discrete) <= 1
+        delta_n = torch.poisson(rates * delta_t).to(state.time.device) # all jumps
+        jump_mask = torch.sum(delta_n, dim=-1).type_as(state.discrete) <= 1 # for categorical data
         diff = (
             torch.arange(self.vocab_size, device=state.time.device).view(
                 1, 1, self.vocab_size
             )
             - state.discrete[:, :, None]
         )
-        net_jumps = torch.sum(all_jumps * diff, dim=-1).type_as(state.discrete)
-        state.discrete += net_jumps * jump_mask
-        state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
+        net_jumps = torch.sum(delta_n * diff, dim=-1).type_as(state.discrete)
+        if overflow == "wrap":
+            state.discrete = (state.discrete + net_jumps * jump_mask) % self.vocab_size
+        elif overflow == "clamp":
+            state.discrete += net_jumps * jump_mask
+            state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
         state.discrete = state.discrete.unsqueeze(-1)
         return state, max_rate
 
