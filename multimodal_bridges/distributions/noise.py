@@ -6,10 +6,9 @@ from torch.distributions.categorical import Categorical
 from tensorclass import TensorMultiModal
 
 
-class MultiModalNoise:
+class Noise:
     def __init__(self, config):
         self.config = config
-
         self.vocab_size = self.config.data.vocab_size
         self.dim_continuous = self.config.data.dim_continuous
         self.metadata = self._load_metadata(self.config.data.target_path)
@@ -31,12 +30,12 @@ class MultiModalNoise:
             cat = Categorical(torch.tensor(probs))
             multiplicity = cat.sample((num_jets,))
             mask = torch.zeros((num_jets, max_num_particles))
-            
+
             for i, n in enumerate(multiplicity):
                 mask[i, :n] = 1
                 idx = torch.randperm(max_num_particles)
-                mask[i] = mask[i][idx] 
-                  
+                mask[i] = mask[i][idx]
+
             mask = mask.long().unsqueeze(-1)
         else:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
@@ -45,12 +44,7 @@ class MultiModalNoise:
         continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
         discrete = None
 
-        if self.config.data.discrete_features == "tokens":
-            discrete = torch.randint(
-                0, self.vocab_size, (num_jets, max_num_particles, 1)
-            )
-            
-        elif self.config.data.discrete_features == "onehot":
+        if self.config.data.discrete_features == "onehot":
             continuous = torch.randn(
                 (num_jets, max_num_particles, self.dim_continuous - self.vocab_size)
             )
@@ -59,6 +53,174 @@ class MultiModalNoise:
             continuous = torch.cat((continuous, pids), dim=-1)
 
         sample = TensorMultiModal(time, continuous, discrete, mask)
+
+        return sample.to(device)
+
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        return metadata
+
+
+class GaussUniform:
+    def __init__(self, config):
+        self.config = config
+
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+        num_jets, max_num_particles = shape
+
+        if sample_masks:
+            probs = self.metadata["categorical_probs"]
+            cat = Categorical(torch.tensor(probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+                idx = torch.randperm(max_num_particles)
+                mask[i] = mask[i][idx]
+
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+        discrete = torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
+        sample = TensorMultiModal(None, continuous, discrete, mask)
+
+        return sample.to(device)
+
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        return metadata
+
+
+class GaussDegenerate:
+    def __init__(self, config):
+        self.config = config
+
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+        num_jets, max_num_particles = shape
+
+        if sample_masks:
+            probs = self.metadata["categorical_probs"]
+            cat = Categorical(torch.tensor(probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+                idx = torch.randperm(max_num_particles)
+                mask[i] = mask[i][idx]
+
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+        discrete = torch.zeros((num_jets, max_num_particles, 1), dtype=torch.long)
+        sample = TensorMultiModal(None, continuous, discrete, mask)
+
+        return sample.to(device)
+
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        return metadata
+
+
+class GaussMasked:
+    def __init__(self, config):
+        self.config = config
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+        num_jets, max_num_particles = shape
+
+        if sample_masks:
+            probs = self.metadata["categorical_probs"]
+            cat = Categorical(torch.tensor(probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+                idx = torch.randperm(max_num_particles)
+                mask[i] = mask[i][idx]
+
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+        discrete = 1 * torch.ones((num_jets, max_num_particles, 1))
+        sample = TensorMultiModal(None, continuous, discrete.long(), mask)
+
+        return sample.to(device)
+
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        return metadata
+
+
+class GaussDataDriven:
+    def __init__(self, config):
+        self.config = config
+
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+        num_jets, max_num_particles = shape
+
+        if sample_masks:
+            probs = self.metadata["categorical_probs"]
+            cat = Categorical(torch.tensor(probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+                idx = torch.randperm(max_num_particles)
+                mask[i] = mask[i][idx]
+
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+        datadriven_probs = [
+            0.304,
+            0.0847,
+            0.2986,
+            0.3078,
+            0.0013,
+            0.0014,
+            0.0011,
+            0.001,
+        ]
+        cat = Categorical(
+            torch.tensor(datadriven_probs),
+        )
+        discrete = cat.sample((num_jets, max_num_particles, 1))
+        sample = TensorMultiModal(None, continuous, discrete, mask)
 
         return sample.to(device)
 

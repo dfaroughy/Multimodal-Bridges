@@ -1,6 +1,6 @@
 import torch
 from datamodules.aoj import AspenOpenJets
-from distributions.noise import MultiModalNoise
+from distributions.noise import Noise, GaussUniform, GaussDegenerate, GaussMasked, GaussDataDriven
 from model.bridges import UniformLinearFlow, SchrodingerBridge, TelegraphBridge
 from encoders.epic import MultiModalEPiC
 from encoders.particle_transformer import MultiModalParticleTransformer
@@ -10,7 +10,11 @@ registered_datasets = {
     }
 
 registered_distributions = {
-    "MultiModalNoise": MultiModalNoise,
+    "Noise": Noise,
+    "GaussUniform": GaussUniform,
+    "GaussDegenerate": GaussDegenerate,
+    "GaussMasked": GaussMasked,
+    "GaussDataDriven": GaussDataDriven,
 }
 
 registered_bridges = {
