@@ -1,8 +1,8 @@
 import torch
 from datamodules.aoj import AspenOpenJets
-from distributions.noise import Noise, GaussUniform, GaussDegenerate, GaussMasked, GaussDataDriven
-from model.bridges import UniformLinearFlow, SchrodingerBridge, TelegraphBridge
-from encoders.epic import MultiModalEPiC, MultiModalFusedEPiC
+from distributions.noise import Noise, SourceUniform, SourceDegenerate, SourceMasked, SourceDataDriven
+from model.bridges import UniformFlow, SchrodingerBridge, TelegraphBridge
+from encoders.multimodal_epic import UniModalEPiC, MultiModalEPiC, MultiModalFusedEPiC
 
 registered_datasets = {
     "AspenOpenJets": AspenOpenJets,
@@ -10,19 +10,20 @@ registered_datasets = {
 
 registered_distributions = {
     "Noise": Noise,
-    "GaussUniform": GaussUniform,
-    "GaussDegenerate": GaussDegenerate,
-    "GaussMasked": GaussMasked,
-    "GaussDataDriven": GaussDataDriven,
+    "SourceUniform": SourceUniform,
+    "SourceDegenerate": SourceDegenerate,
+    "SourceMasked": SourceMasked,
+    "SourceDataDriven": SourceDataDriven,
 }
 
 registered_bridges = {
-    "UniformLinearFlow": UniformLinearFlow,
+    "UniformFlow": UniformFlow,
     "SchrodingerBridge": SchrodingerBridge,
     "TelegraphBridge": TelegraphBridge,
 }
 
 registered_models = {
+    "UniModalEPiC": UniModalEPiC,
     "MultiModalEPiC": MultiModalEPiC,
     "MultiModalFusedEPiC": MultiModalFusedEPiC,
 }

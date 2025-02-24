@@ -110,16 +110,17 @@ class ExperimentConfigs:
 
         self._load_config(config)
         assert self.encoder.dim_emb_time > 0, "Non-zero dim_emb_time must be provided."
-
-        self.data.dim_continuous = len(self.data.continuous_features)
         
-        if self.data.discrete_features:
+        if self.data.continuous_features is not None:
+            self.data.dim_continuous = len(self.data.continuous_features)
+        
+        if self.data.discrete_features is not None:
             assert self.data.vocab_size > 0, "vocab_size must be provided for discrete features"
 
         if self.data.discrete_features == "onehot":
             self.data.dim_continuous += self.data.vocab_size
 
-        if self.data.modality == "multi-modal":
+        if self.data.modality == "multi-modal" or self.data.modality == "discrete":
             self.data.dim_discrete = 1        
             if self.data.discrete_features == "tokens":
                 self.encoder.embed_type_discrete = "LookupTable"

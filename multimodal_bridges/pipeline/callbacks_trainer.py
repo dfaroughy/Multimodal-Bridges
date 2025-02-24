@@ -66,11 +66,14 @@ class ExperimentLoggerCallback(Callback):
     @rank_zero_only
     def _save_metada_to_dir(self, trainer):
         """Save metadata to the checkpoint directory"""
+
         while not self.checkpoint_dir_created and Path(trainer.config.path).exists():
             self.checkpoint_dir_created = True
             trainer.config.save(Path(trainer.config.path))
+
             with open(Path(trainer.config.path) / "metadata.json", "w") as f:
                 json.dump(trainer.metadata, f, indent=4)
+
             log.info("Config file and metadata save to experiment path.")
 
     def _track_metrics(self, stage: str, outputs: Dict[str, torch.Tensor]):
@@ -83,10 +86,13 @@ class ExperimentLoggerCallback(Callback):
         for key, value in outputs.items():
             if key not in self.epoch_metrics[stage]:
                 self.epoch_metrics[stage][key] = []
+
             if isinstance(value, torch.Tensor):  # Handle tensor values
                 self.epoch_metrics[stage][key].append(value.detach().cpu().item())
+
             elif isinstance(value, (float, int)):  # Handle float or int values
                 self.epoch_metrics[stage][key].append(value)
+
             else:
                 raise TypeError(
                     f"Unsupported metric type for key '{key}': {type(value)}"
@@ -111,4 +117,5 @@ class ExperimentLoggerCallback(Callback):
                 sync_dist=self.sync_dist,
             )
             epoch_metrics[key] = epoch_metric
+            
         self.epoch_metrics[stage].clear()  # Reset for next epoch

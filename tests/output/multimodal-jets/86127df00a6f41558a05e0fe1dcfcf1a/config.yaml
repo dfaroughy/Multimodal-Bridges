@@ -13,22 +13,19 @@ comet_logger:
   workspace: dfaroughy
 data:
   batch_size: 10
-  continuous_features:
-  - pt
-  - eta_rel
-  - phi_rel
+  continuous_features: null
   dim_context_continuous: 0
   dim_context_discrete: 0
-  dim_continuous: 3
+  dim_continuous: 0
   dim_discrete: 1
   discrete_features: tokens
   max_num_particles: 128
   min_num_particles: 0
-  modality: multi-modal
+  modality: discrete
   num_jets: 100
   num_workers: 0
   pin_memory: false
-  source_name: MultiModalNoise
+  source_name: SourceUniform
   source_path: null
   source_test_files: null
   source_train_files: null
@@ -47,7 +44,7 @@ encoder:
   data_augmentation: false
   dim_emb_context_continuous: 0
   dim_emb_context_discrete: 0
-  dim_emb_continuous: 4
+  dim_emb_continuous: 0
   dim_emb_discrete: 4
   dim_emb_time: 4
   dim_hidden_glob: 4
@@ -55,21 +52,21 @@ encoder:
   dropout: 0.2
   embed_type_context_continuous: null
   embed_type_context_discrete: null
-  embed_type_continuous: Linear
+  embed_type_continuous: null
   embed_type_discrete: LookupTable
   embed_type_time: SinusoidalPositionalEncoding
-  name: MultiModalEPiC
+  name: UniModalEPiC
   num_blocks: 2
   skip_connection: true
 model:
-  bridge_continuous: UniformLinearFlow
+  bridge_continuous: null
   bridge_discrete: TelegraphBridge
   gamma: 0.125
-  loss_weights: learnable
+  loss_weights: fixed
   num_timesteps: 10
-  sigma: 0.0001
+  sigma: null
   time_eps: 0.0001
-path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/a4e55223e6f34516af890204cef75ebf
+path: /home/df630/Multimodal-Bridges/tests/output/multimodal-jets/86127df00a6f41558a05e0fe1dcfcf1a
 trainer:
   gradient_clip_val: 1.0
   max_epochs: 5

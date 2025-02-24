@@ -1,45 +1,39 @@
 trainer:
-  max_epochs: 10
+  max_epochs: 20
   gradient_clip_val: 1.0
   optimizer_name: AdamW
   optimizer_params:
-    lr: 0.001
+    lr: 0.0005
     weight_decay: 5.0e-5
     betas: [0.9, 0.999]
     eps: 1.e-8
     amsgrad: false
   scheduler_name: CosineAnnealingLR
   scheduler_params:
-    T_max: 10
-    eta_min: 1.0e-5
+    T_max: 20
+    eta_min: 1.0e-4
     last_epoch: -1
 
 data:
-  modality: multi-modal
-  batch_size: 1024
+  modality: discrete
+  batch_size: 300
   split_ratios: [0.9, 0.1]  # train / val / test
-  transform: standardize
-  continuous_features: ['pt', 'eta_rel', 'phi_rel']
   discrete_features: tokens
-  vocab_size: 8
-  # vocab_freq: [0.0995, 0.1307, 0.1002, 0.0989, 0.1427, 0.1427, 0.1427, 0.1427]
+  vocab_size: 8  
   target_name: AspenOpenJets
   target_path: /home/df630/Multimodal-Bridges/data/aoj/
   target_train_files: RunG_batch0.h5
   target_test_files: RunG_batch1.h5
-  source_name: MultiModalNoise
+  source_name: 'SourceUniform'
   min_num_particles: 0
   max_num_particles: 128
-  num_jets: 100_000  
+  num_jets: 100_000
 
 model:
-  bridge_continuous: UniformLinearFlow
   bridge_discrete: TelegraphBridge
-  loss_weights: 'learnable'
-  sigma: 0.0001
-  gamma: 0.125
+  gamma: 0.075
   num_timesteps: 200
-  time_eps: 0.01
+  time_eps: 0.0001
 
 encoder:
   name: MultiModalEPiC
@@ -47,9 +41,8 @@ encoder:
   dim_hidden_local: 128
   dim_hidden_glob: 16
   skip_connection: true
-  dropout: 0.2
+  dropout: 0.
   dim_emb_time: 128
-  dim_emb_continuous: 128
   dim_emb_discrete: 128
 
 comet_logger:
@@ -62,6 +55,6 @@ checkpoints:
   dirpath: null 
   monitor: val_loss      
   mode: min            
-  save_top_k: 1
+  save_top_k: 3
   filename: best-{epoch:02d}-{val_loss:.4f}
   save_last: true

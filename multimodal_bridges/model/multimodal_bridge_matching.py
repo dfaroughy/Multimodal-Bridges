@@ -115,14 +115,14 @@ class MultiModalBridgeMatching(L.LightningModule):
             batch.source.continuous,
             batch.source.discrete,
             batch.source.mask,
-        ) # t=0
+        )  # t=0
 
         target_state = TensorMultiModal(
             torch.ones_like(batch.source.mask),
             batch.target.continuous,
             batch.target.discrete,
             batch.target.mask,
-        ) # t=1
+        )  # t=1
 
         paths = self.simulate_dynamics(source_state, batch)  # still preprocessed!
 
@@ -239,9 +239,10 @@ class MultiModalBridgeMatching(L.LightningModule):
 
             paths.append(state.clone())
 
-        state.discrete = max_rate.unsqueeze(
-            -1
-        )  # replace last timestep with argmax rate
+        if heads.has_discrete:
+            # replace last timestep with argmax of final rates
+            state.discrete = max_rate.unsqueeze(-1)  
+
         paths.append(state)
         paths = TensorMultiModal.stack(paths, dim=0)
         return paths

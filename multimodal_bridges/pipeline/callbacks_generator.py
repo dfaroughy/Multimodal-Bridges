@@ -53,24 +53,24 @@ class JetGeneratorCallback(Callback):
 
     def _save_results_local(self, rank):
         random = np.random.randint(0, 1000)
+
         paths = TensorMultiModal.cat(self.batched_paths, dim=1)
         paths.save_to(f"{self.data_dir}/temp_paths_{rank}_{random}.h5")
+
         test = TensorMultiModal.cat(self.batched_target_states)
         test.save_to(f"{self.data_dir}/temp_test_{rank}_{random}.h5")
 
     @rank_zero_only
     def _gather_results_global(self, trainer):
-
         paths_files = self.data_dir.glob("temp_paths_*_*.h5")
         test_files = self.data_dir.glob("temp_test_*_*.h5")
 
         paths_list = [TensorMultiModal.load_from(str(f)) for f in paths_files]
-        # for paths in paths_list:
-        #     print(paths.time.shape ,paths.continuous.shape, paths.discrete.shape, paths.mask.shape)
         paths = TensorMultiModal.cat(paths_list, dim=1)
         paths = self._postprocess(paths, transform=self.transform)
         paths.save_to(f"{self.data_dir}/paths_sample.h5")
-        gen_states = paths[-1] 
+        gen_states = paths[-1]
+        print(gen_states.shape, gen_states.continuous, gen_states.discrete.shape, gen_states.available_modes())
         gen_jets = JetFeatures(gen_states)
 
         test_list = [TensorMultiModal.load_from(str(f)) for f in test_files]
@@ -112,9 +112,14 @@ class JetGeneratorCallback(Callback):
             paths.continuous[:, :, 0] = torch.exp(paths.continuous[:, :, 0]) - 1e-6
 
         if self.config.data.discrete_features == "onehot":
-            paths.discrete = paths.continuous[:, :, -self.config.data.vocab_size :]
-            paths.continuous = paths.continuous[:, :, : -self.config.data.vocab_size]
+
+            paths.discrete = paths.continuous.clone()[..., -self.config.data.vocab_size :]
             paths.discrete = torch.argmax(paths.discrete, dim=-1).unsqueeze(-1)
+            paths.continuous = paths.continuous[..., : -self.config.data.vocab_size]
+            if paths.continuous.shape[-1] == 0:
+                del paths.continuous        
+
+        # print(paths.shape, paths.continuous, paths.discrete.shape)
 
         paths.apply_mask()
 
@@ -134,113 +139,51 @@ class JetGeneratorCallback(Callback):
         return metadata
 
     def compute_performance_metrics(self, gen_jets, test_jets):
-        return {
-            "obs": [
-                "pt",
-                "m",
-                "tau21",
-                "tau32",
-                "d2",
-                "total charge",
-                "jet charge",
-                "Photon  multiplicity",
-                "Neutral Hadron multiplicity",
-                "Charged Hadron multiplicity",
-                "Lepton multiplicity",
-            ],
-            "W1": [
-                test_jets.Wassertein1D("pt", gen_jets),
-                test_jets.Wassertein1D("m", gen_jets),
-                test_jets.Wassertein1D("tau21", gen_jets),
-                test_jets.Wassertein1D("tau32", gen_jets),
-                test_jets.Wassertein1D("d2", gen_jets),
-                test_jets.Wassertein1D("charge", gen_jets),
-                test_jets.Wassertein1D("jet_charge", gen_jets),
-                test_jets.Wassertein1D("numPhotons", gen_jets),
-                test_jets.Wassertein1D("numNeutralHadrons", gen_jets),
-                test_jets.Wassertein1D("numChargedHadrons", gen_jets),
-                test_jets.Wassertein1D("numLeptons", gen_jets),
-            ],
-        }
+        continuous_metrics = {}
+        discrete_metrics = {}
+
+        if gen_jets.constituents.has_continuous:
+            continuous_metrics = {
+                "obs": [
+                    "pt",
+                    "m",
+                    "tau21",
+                    "tau32",
+                    "d2",
+                ],
+                "W1": [
+                    test_jets.Wassertein1D("pt", gen_jets),
+                    test_jets.Wassertein1D("m", gen_jets),
+                    test_jets.Wassertein1D("tau21", gen_jets),
+                    test_jets.Wassertein1D("tau32", gen_jets),
+                    test_jets.Wassertein1D("d2", gen_jets),
+                ],
+            }
+
+        if gen_jets.constituents.has_discrete:
+            discrete_metrics = {
+                "obs": [
+                    "total charge",
+                    "Photon  multiplicity",
+                    "Neutral Hadron multiplicity",
+                    "Charged Hadron multiplicity",
+                    "Lepton multiplicity",
+                ],
+                "W1": [
+                    test_jets.Wassertein1D("charge", gen_jets),
+                    test_jets.Wassertein1D("numPhotons", gen_jets),
+                    test_jets.Wassertein1D("numNeutralHadrons", gen_jets),
+                    test_jets.Wassertein1D("numChargedHadrons", gen_jets),
+                    test_jets.Wassertein1D("numLeptons", gen_jets),
+                ],
+            }
+
+        return {**continuous_metrics, **discrete_metrics}
 
     def get_results_plots(self, gen_jets, test_jets):
-        continuous_plots = {
-            "gen clouds": self.display_clouds(gen_jets.constituents),
-            "particle transverse momentum": self.plot_feature(
-                "pt",
-                gen_jets.constituents,
-                test_jets.constituents,
-                apply_map="mask_bool",
-                xlabel=r"$p_t$ [GeV]",
-                binrange=(0, 400),
-                binwidth=5,
-                log=True,
-                suffix_file="_part",
-            ),
-            "particle rapidity": self.plot_feature(
-                "eta_rel",
-                gen_jets.constituents,
-                test_jets.constituents,
-                apply_map="mask_bool",
-                xlabel=r"$\eta^{\rm rel}$",
-                log=True,
-                suffix_file="_part",
-            ),
-            "particle azimuth": self.plot_feature(
-                "phi_rel",
-                gen_jets.constituents,
-                test_jets.constituents,
-                apply_map="mask_bool",
-                xlabel=r"$\phi^{\rm rel}$",
-                log=True,
-                suffix_file="_part",
-            ),
-            "jet transverse momentum": self.plot_feature(
-                "pt",
-                gen_jets,
-                test_jets,
-                binrange=(0, 800),
-                binwidth=8,
-                xlabel=r"$p_t$ [GeV]",
-            ),
-            "jet rapidity": self.plot_feature(
-                "eta",
-                gen_jets,
-                test_jets,
-                xlabel=r"$\eta$",
-            ),
-            "jet azimuth": self.plot_feature(
-                "phi",
-                gen_jets,
-                test_jets,
-                xlabel=r"$\phi$",
-            ),
-            "jet mass": self.plot_feature(
-                "m",
-                gen_jets,
-                test_jets,
-                binrange=(0, 250),
-                binwidth=2,
-                xlabel=r"$m$ [GeV]",
-            ),
-            "energy correlation function": self.plot_feature(
-                "d2",
-                gen_jets,
-                test_jets,
-                xlabel=r"$D_2$",
-            ),
-            "21-subjetiness ratio": self.plot_feature(
-                "tau21",
-                gen_jets,
-                test_jets,
-                xlabel=r"$\tau_{21}$",
-            ),
-            "23-subjetiness ratio": self.plot_feature(
-                "tau32",
-                gen_jets,
-                test_jets,
-                xlabel=r"$\tau_{32}$",
-            ),
+        hybrid_plots = {}
+        continuous_plots = {}
+        discrete_plots = {
             "particle multipicity": self.plot_feature(
                 "multiplicity",
                 gen_jets.constituents,
@@ -248,8 +191,88 @@ class JetGeneratorCallback(Callback):
                 apply_map=lambda x: x.squeeze(-1),
                 discrete=True,
                 xlabel=r"$N$",
-            ),
+            )
         }
+
+        if gen_jets.constituents.has_continuous:
+            continuous_plots = {
+                "particle transverse momentum": self.plot_feature(
+                    "pt",
+                    gen_jets.constituents,
+                    test_jets.constituents,
+                    apply_map="mask_bool",
+                    xlabel=r"$p_t$ [GeV]",
+                    binrange=(0, 400),
+                    binwidth=5,
+                    log=True,
+                    suffix_file="_part",
+                ),
+                "particle rapidity": self.plot_feature(
+                    "eta_rel",
+                    gen_jets.constituents,
+                    test_jets.constituents,
+                    apply_map="mask_bool",
+                    xlabel=r"$\eta^{\rm rel}$",
+                    log=True,
+                    suffix_file="_part",
+                ),
+                "particle azimuth": self.plot_feature(
+                    "phi_rel",
+                    gen_jets.constituents,
+                    test_jets.constituents,
+                    apply_map="mask_bool",
+                    xlabel=r"$\phi^{\rm rel}$",
+                    log=True,
+                    suffix_file="_part",
+                ),
+                "jet transverse momentum": self.plot_feature(
+                    "pt",
+                    gen_jets,
+                    test_jets,
+                    binrange=(0, 800),
+                    binwidth=8,
+                    xlabel=r"$p_t$ [GeV]",
+                ),
+                "jet rapidity": self.plot_feature(
+                    "eta",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$\eta$",
+                ),
+                "jet azimuth": self.plot_feature(
+                    "phi",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$\phi$",
+                ),
+                "jet mass": self.plot_feature(
+                    "m",
+                    gen_jets,
+                    test_jets,
+                    binrange=(0, 250),
+                    binwidth=2,
+                    xlabel=r"$m$ [GeV]",
+                ),
+                "energy correlation function": self.plot_feature(
+                    "d2",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$D_2$",
+                ),
+                "21-subjetiness ratio": self.plot_feature(
+                    "tau21",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$\tau_{21}$",
+                ),
+                "23-subjetiness ratio": self.plot_feature(
+                    "tau32",
+                    gen_jets,
+                    test_jets,
+                    xlabel=r"$\tau_{32}$",
+                ),
+            }
+
         if gen_jets.constituents.has_discrete:
             discrete_plots = {
                 "all hadrons": self.plot_feature(
@@ -266,8 +289,72 @@ class JetGeneratorCallback(Callback):
                     xlabel=r"$N_{\ell}$",
                     discrete=True,
                 ),
+                "photon N": self.plot_feature(
+                    "numPhotons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{\gamma}$",
+                ),
+                "neutral hadron N": self.plot_feature(
+                    "numNeutralHadrons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{h^0}$",
+                ),
+                "negative hadron N": self.plot_feature(
+                    "numNegativeHadrons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{h^-}$",
+                ),
+                "positive hadron N": self.plot_feature(
+                    "numPositiveHadrons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{h^+}$",
+                ),
+                "electron N": self.plot_feature(
+                    "numElectrons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{e^-}$",
+                ),
+                "positron N": self.plot_feature(
+                    "numPositrons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{e^+}$",
+                ),
+                "muon N": self.plot_feature(
+                    "numMuons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{\mu^-}$",
+                ),
+                "antimuon N": self.plot_feature(
+                    "numAntiMuons",
+                    gen_jets,
+                    test_jets,
+                    discrete=True,
+                    xlabel=r"$N_{\mu^+}$",
+                ),
+
                 "electric charges": self.plot_charges(gen_jets, test_jets),
-                "flavor counts": self.plot_flavor_counts_per_jet(gen_jets, test_jets),
+                "flavor counts avg": self.plot_flavor_counts_per_jet(
+                    gen_jets, test_jets
+                ),
+            }
+
+        if gen_jets.constituents.has_hybrid:
+            hybrid_plots = {
+                "gen clouds": self.display_clouds(gen_jets.constituents),
                 "photon kin": self.plot_flavored_kinematics(
                     "Photon", gen_jets, test_jets
                 ),
@@ -291,8 +378,8 @@ class JetGeneratorCallback(Callback):
                     "AntiMuon", gen_jets, test_jets
                 ),
             }
-            return {**continuous_plots, **discrete_plots}
-        return continuous_plots
+
+        return {**continuous_plots, **discrete_plots, **hybrid_plots}
 
     def plot_feature(
         self,
@@ -366,7 +453,7 @@ class JetGeneratorCallback(Callback):
             "PositiveHadron": "{\,h^+}",
         }
 
-        fig, ax = plt.subplots(1, 4, figsize=(8, 2))
+        fig, ax = plt.subplots(1, 3, figsize=(6, 2))
         test.constituents.histplot(
             f"pt_{flavor}",
             apply_map=None,
@@ -441,30 +528,30 @@ class JetGeneratorCallback(Callback):
             stat="density",
             xlim=(-1.2, 1.2),
         )
-        test.histplot(
-            f"num{flavor}s",
-            ax=ax[3],
-            fill=False,
-            discrete=True,
-            lw=1,
-            color="k",
-            log_scale=(False, False),
-            stat="density",
-        )
-        gen.histplot(
-            f"num{flavor}s",
-            ax=ax[3],
-            fill=False,
-            discrete=True,
-            lw=1,
-            color="crimson",
-            log_scale=(False, False),
-            stat="density",
-        )
+        # test.histplot(
+        #     f"num{flavor}s",
+        #     ax=ax[3],
+        #     fill=False,
+        #     discrete=True,
+        #     lw=1,
+        #     color="k",
+        #     log_scale=(False, False),
+        #     stat="density",
+        # )
+        # gen.histplot(
+        #     f"num{flavor}s",
+        #     ax=ax[3],
+        #     fill=False,
+        #     discrete=True,
+        #     lw=1,
+        #     color="crimson",
+        #     log_scale=(False, False),
+        #     stat="density",
+        # )
         ax[0].set_xlabel(rf"$p_T^{flavor_labels[flavor]}$")
         ax[1].set_xlabel(rf"$\eta^{flavor_labels[flavor]}$")
         ax[2].set_xlabel(rf"$\phi^{flavor_labels[flavor]}$")
-        ax[3].set_xlabel(rf"$N_{flavor_labels[flavor]}$")
+        # ax[3].set_xlabel(rf"$N_{flavor_labels[flavor]}$")
         ax[0].set_ylabel("density")
 
         plt.tight_layout()
@@ -473,7 +560,7 @@ class JetGeneratorCallback(Callback):
         return fig
 
     def plot_charges(self, gen, test):
-        fig, ax = plt.subplots(1, 4, figsize=(8, 2))
+        fig, ax = plt.subplots(1, 3, figsize=(6, 2))
         test.histplot(
             "numNeutrals",
             ax=ax[0],
@@ -533,29 +620,10 @@ class JetGeneratorCallback(Callback):
             lw=1,
             stat="density",
             xlabel=r"$Q_{\rm jet}^{\kappa=0}$",
-        )
-        test.histplot(
-            "jet_charge",
-            ax=ax[3],
-            fill=False,
-            color="k",
-            lw=1,
-            stat="density",
-            xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
-        )
-        gen.histplot(
-            "jet_charge",
-            ax=ax[3],
-            fill=False,
-            color="crimson",
-            lw=1,
-            stat="density",
-            xlabel=r"$Q_{\rm jet}^{\kappa=1}$",
         )
         ax[0].set_xticks([0, 20, 40, 60])
         ax[1].set_xticks([0, 20, 40, 60, 80])
         ax[2].set_xticks([-20, -10, 0, 10, 20])
-        ax[3].set_xticks([-0.75, 0, 0.75])
         ax[0].set_ylabel("density")
         plt.tight_layout()
         plt.savefig(self.plots_dir / "charges.png")
@@ -567,7 +635,7 @@ class JetGeneratorCallback(Callback):
         jets.display_cloud(1, scale_marker=10, ax=ax[0, 1])
         jets.display_cloud(2, scale_marker=10, ax=ax[0, 2])
         jets.display_cloud(3, scale_marker=10, ax=ax[0, 3])
-        jets.display_cloud(4, scale_marker=10, ax=ax[0, 4], legend=True)
+        jets.display_cloud(4, scale_marker=10, ax=ax[0, 4])
         jets.display_cloud(5, scale_marker=10, ax=ax[1, 0])
         jets.display_cloud(6, scale_marker=10, ax=ax[1, 1])
         jets.display_cloud(7, scale_marker=10, ax=ax[1, 2])

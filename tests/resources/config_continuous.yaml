@@ -1,5 +1,5 @@
 trainer:
-  max_epochs: 2
+  max_epochs: 5
   gradient_clip_val: 1.0
   optimizer_name: AdamW
   optimizer_params:
@@ -18,35 +18,30 @@ data:
   modality: continuous
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
+  continuous_features: ['pt', 'eta_rel', 'phi_rel']
   target_name: AspenOpenJets
-  target_path: /home/df630/Multimodal-Bridges/tests/resources
+  target_path: /home/df630/Multimodal-Bridges/tests/resources/
   target_train_files: 2016H_job0_mini.h5
   target_test_files: 2016H_job0_mini.h5
-  source_name: MultiModalNoise
-  source_path: null
-  source_train_files: null
-  source_test_files: null
+  source_name: SourceUniform
   min_num_particles: 0
   max_num_particles: 128
   num_jets: 100
-  dim_continuous: 3       
+  vocab_size: 8 
 
 model:
-  bridge_continuous: UniformLinearFlow
+  bridge_continuous: UniformFlow
   sigma: 0.0001
   num_timesteps: 10
   time_eps: 0.0001
 
 encoder:
-  name: MultiModalEPiC
-  num_blocks: 1
+  name: UniModalEPiC
+  num_blocks: 2
   dim_hidden_local: 4
   dim_hidden_glob: 4
   skip_connection: true
-  dropout: 0.0
-  data_augmentation: false
-  embed_type_time: SinusoidalPositionalEncoding
-  embed_type_continuous: Linear
+  dropout: 0.2
   dim_emb_time: 4
   dim_emb_continuous: 4
 

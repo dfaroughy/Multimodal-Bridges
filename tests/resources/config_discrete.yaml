@@ -15,10 +15,9 @@ trainer:
     last_epoch: -1
 
 data:
-  modality: multi-modal
+  modality: discrete
   batch_size: 10
   split_ratios: [0.7, 0.3]  # train / val / test
-  continuous_features: ['pt', 'eta_rel', 'phi_rel']
   discrete_features: tokens
   target_name: AspenOpenJets
   target_path: /home/df630/Multimodal-Bridges/tests/resources/
@@ -31,23 +30,19 @@ data:
   vocab_size: 8 
 
 model:
-  bridge_continuous: UniformFlow
   bridge_discrete: TelegraphBridge
-  loss_weights: 'learnable'
-  sigma: 0.0001
   gamma: 0.125
   num_timesteps: 10
   time_eps: 0.0001
 
 encoder:
-  name: MultiModalEPiC
-  num_blocks: [1,1,1]
-  dim_hidden_local: [6,2,2]
-  dim_hidden_glob: [6,2,2]
+  name: UniModalEPiC
+  num_blocks: 2
+  dim_hidden_local: 4
+  dim_hidden_glob: 4
   skip_connection: true
   dropout: 0.2
   dim_emb_time: 4
-  dim_emb_continuous: 4
   dim_emb_discrete: 4
 
 comet_logger:

@@ -101,8 +101,6 @@ class MultiModalEmbedder(nn.Module):
                     dim_hidden=dim_emb_x,
                 )
 
-                # log.warn(f"setting dim_emb_continuous = {dim_x}", dim_emb_x == 0)
-
         # Discrete embeddings
         if config.data.modality in ["discrete", "multi-modal"]:
             if config.encoder.embed_type_discrete:
@@ -111,8 +109,6 @@ class MultiModalEmbedder(nn.Module):
                     dim_input=config.data.vocab_size,
                     dim_hidden=dim_emb_k,
                 )
-
-                # log.warn(f"setting dim_emb_discrete = {dim_k}", dim_emb_k == 0)
 
         # Context embeddings
         if config.encoder.embed_type_context_continuous:
@@ -146,6 +142,7 @@ class MultiModalEmbedder(nn.Module):
     def forward(
         self, state: TensorMultiModal, batch: TensorMultiModal
     ) -> Tuple[TensorMultiModal, TensorMultiModal]:
+
         continuous_feats, discrete_feats = None, None
         continuous_context, discrete_context = None, None
 
@@ -158,12 +155,7 @@ class MultiModalEmbedder(nn.Module):
 
         # Embed features
         if state.has_continuous:
-            if self.augmentation:
-                continuous_feats = torch.cat(
-                    [state.continuous, batch.source.continuous], dim=-1
-                )
-            else:
-                continuous_feats = state.continuous
+            continuous_feats = state.continuous
             if hasattr(self, "embedding_continuous"):
                 continuous_feats = self.embedding_continuous(continuous_feats)
 

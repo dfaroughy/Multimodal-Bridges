@@ -51,8 +51,11 @@ class AspenOpenJets:
         jet_count = 0
 
         if features["discrete"] == "onehot":
-            features["continuous"].append("onehot")
-
+            if features["continuous"] is not None:
+                features["continuous"].append("onehot")
+            else:
+                features["continuous"] = ["onehot"]
+                
         for datafile in self.data_files:
             path = os.path.join(self.data_dir, datafile)
 
@@ -70,9 +73,10 @@ class AspenOpenJets:
 
             feats, mask = self._read_aoj_file(path, num_jets)
 
-            list_continuous_feats.append(
-                torch.cat([feats[x] for x in features["continuous"]], dim=-1)
-            )
+            if features["continuous"]:  
+                list_continuous_feats.append(
+                    torch.cat([feats[x] for x in features["continuous"]], dim=-1)
+                )
 
             if features["discrete"] == "tokens":
                 list_discrete_feats.append(torch.tensor(feats[features["discrete"]]))
@@ -85,9 +89,11 @@ class AspenOpenJets:
                 if jet_count > num_jets:
                     break
 
-        continuous = torch.cat(list_continuous_feats, dim=0)[
-            :num_jets, :max_num_particles, :
-        ]
+        continuous = (
+            torch.cat(list_continuous_feats, dim=0)[:num_jets, :max_num_particles, :]
+            if len(list_continuous_feats)
+            else None
+        )
 
         discrete = (
             torch.cat(list_discrete_feats, dim=0)[:num_jets, :max_num_particles, :]
@@ -107,7 +113,6 @@ class AspenOpenJets:
         return output, metadata
 
     def _preprocess(self, continuous, discrete, mask, transform):
-
         metadata = self._extract_metadata(continuous, mask)
 
         if transform == "standardize":
@@ -129,12 +134,14 @@ class AspenOpenJets:
 
         # shuffle particles within jets
 
-        idx = torch.randperm(continuous.shape[1])
-        continuous = continuous[:, idx, :]
+        idx = torch.randperm(mask.shape[1])
+
+        if continuous is not None:
+            continuous = continuous[:, idx, :]
         if discrete is not None:
             discrete = discrete[:, idx, :]
         mask = mask[:, idx, :]
-        
+
         return continuous, discrete, mask, metadata
 
     def _read_aoj_file(self, filepath, num_jets=None):
@@ -245,21 +252,27 @@ class AspenOpenJets:
         return metadata
 
     def _extract_metadata(self, continuous, mask):
+
         mask_bool = mask.squeeze(-1) > 0
         nums = mask.sum(dim=1).squeeze()
         hist, _ = np.histogram(
-            nums, bins=np.arange(0, continuous.shape[1] + 2, 1), density=True
+            nums, bins=np.arange(0, mask.shape[1] + 2, 1), density=True
         )
-        return {
-            "num_jets_sample": continuous.shape[0],
+
+        metadata =  {
+            "num_jets_sample": mask.shape[0],
             "num_particles_sample": nums.sum().item(),
-            "max_num_particles_per_jet": continuous.shape[1],
-            "mean": continuous[mask_bool].mean(0).tolist(),
-            "std": continuous[mask_bool].std(0).tolist(),
-            "min": continuous[mask_bool].min(0).values.tolist(),
-            "max": continuous[mask_bool].max(0).values.tolist(),
-            "categorical_probs": hist.tolist(),
-        }
+            "max_num_particles_per_jet": mask.shape[1],
+            }
+        
+        if continuous is not None:
+            metadata["mean"] = continuous[mask_bool].mean(0).tolist()
+            metadata["std"] = continuous[mask_bool].std(0).tolist()
+            metadata["min"] = continuous[mask_bool].min(0).values.tolist()
+            metadata["max"] = continuous[mask_bool].max(0).values.tolist()
+
+        metadata["categorical_probs"] = hist.tolist()
+        return metadata
 
 
 class AOJDataModule(L.LightningDataModule):

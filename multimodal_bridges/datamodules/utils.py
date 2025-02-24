@@ -29,29 +29,36 @@ class ParticleClouds:
         self.continuous = self.data.continuous
         self.discrete = self.data.discrete
         self.mask = self.data.mask
-        self.pt = self.continuous[..., 0]
-        self.eta_rel = self.continuous[..., 1]
-        self.phi_rel = self.continuous[..., 2]
-        self.px = self.pt * torch.cos(self.phi_rel)
-        self.py = self.pt * torch.sin(self.phi_rel)
-        self.pz = self.pt * torch.sinh(self.eta_rel)
-        self.e = self.pt * torch.cosh(self.eta_rel)
         self.mask_bool = self.mask.squeeze(-1) > 0
         self.multiplicity = torch.sum(self.mask, dim=1)
 
-        self.has_displaced_vertex = self.continuous.shape[-1] > 3
+        if self.data.has_continuous:
+            self.pt = self.continuous[..., 0]
+            self.eta_rel = self.continuous[..., 1]
+            self.phi_rel = self.continuous[..., 2]
+            self.px = self.pt * torch.cos(self.phi_rel)
+            self.py = self.pt * torch.sin(self.phi_rel)
+            self.pz = self.pt * torch.sinh(self.eta_rel)
+            self.e = self.pt * torch.cosh(self.eta_rel)
+            self.has_displaced_vertex = self.continuous.shape[-1] > 3
 
-        if self.has_displaced_vertex:
-            self.d0 = self.continuous[..., 3]
-            self.d0Err = self.continuous[..., 4]
-            self.dz = self.continuous[..., 5]
-            self.dzErr = self.continuous[..., 6]
-            self.d0_ratio = np.divide(
-                self.d0, self.d0Err, out=np.zeros_like(self.d0), where=self.d0Err != 0
-            )
-            self.dz_ratio = np.divide(
-                self.dz, self.dzErr, out=np.zeros_like(self.dz), where=self.dzErr != 0
-            )
+            if self.has_displaced_vertex:
+                self.d0 = self.continuous[..., 3]
+                self.d0Err = self.continuous[..., 4]
+                self.dz = self.continuous[..., 5]
+                self.dzErr = self.continuous[..., 6]
+                self.d0_ratio = np.divide(
+                    self.d0,
+                    self.d0Err,
+                    out=np.zeros_like(self.d0),
+                    where=self.d0Err != 0,
+                )
+                self.dz_ratio = np.divide(
+                    self.dz,
+                    self.dzErr,
+                    out=np.zeros_like(self.dz),
+                    where=self.dzErr != 0,
+                )
 
         if self.data.has_discrete:
             self._flavored_kinematics(
@@ -96,19 +103,22 @@ class ParticleClouds:
             )
 
     def _flavored_kinematics(self, name, selection):
-        setattr(self, f"is{name}", selection * self.mask_bool)
-        setattr(self, f"num_{name}", torch.sum(getattr(self, f"is{name}"), dim=1))
-        setattr(self, f"pt_{name}", self.pt[getattr(self, f"is{name}")])
-        setattr(self, f"eta_{name}", self.eta_rel[getattr(self, f"is{name}")])
-        setattr(self, f"phi_{name}", self.phi_rel[getattr(self, f"is{name}")])
+        if self.data.has_discrete:
+            setattr(self, f"is{name}", selection * self.mask_bool)
+            setattr(self, f"num_{name}", torch.sum(getattr(self, f"is{name}"), dim=1))
 
-        if self.has_displaced_vertex:
-            setattr(self, f"d0_{name}", self.d0[getattr(self, f"is{name}")])
-            setattr(self, f"d0Err_{name}", self.d0Err[getattr(self, f"is{name}")])
-            setattr(self, f"dz_{name}", self.dz[getattr(self, f"is{name}")])
-            setattr(self, f"dzErr_{name}", self.dzErr[getattr(self, f"is{name}")])
-            setattr(self, f"d0_ratio_{name}", self.d0_ratio[getattr(self, f"is{name}")])
-            setattr(self, f"dz_ratio_{name}", self.dz_ratio[getattr(self, f"is{name}")])
+        if self.data.has_continuous:
+            setattr(self, f"pt_{name}", self.pt[getattr(self, f"is{name}")])
+            setattr(self, f"eta_{name}", self.eta_rel[getattr(self, f"is{name}")])
+            setattr(self, f"phi_{name}", self.phi_rel[getattr(self, f"is{name}")])
+
+            if self.has_displaced_vertex:
+                setattr(self, f"d0_{name}", self.d0[getattr(self, f"is{name}")])
+                setattr(self, f"d0Err_{name}", self.d0Err[getattr(self, f"is{name}")])
+                setattr(self, f"dz_{name}", self.dz[getattr(self, f"is{name}")])
+                setattr(self, f"dzErr_{name}", self.dzErr[getattr(self, f"is{name}")])
+                setattr(self, f"d0_ratio_{name}", self.d0_ratio[getattr(self, f"is{name}")])
+                setattr(self, f"dz_ratio_{name}", self.dz_ratio[getattr(self, f"is{name}")])
 
     def __len__(self):
         return len(self.data)
@@ -125,9 +135,16 @@ class ParticleClouds:
             return True
         return False
 
+    @property
+    def has_hybrid(self):
+        if self.data.has_discrete and self.data.has_continuous:
+            return True
+        return False
+
+
     def histplot(
         self,
-        feature="pt",
+        feature,
         apply_map="mask_bool",
         xlim=None,
         ylim=None,
@@ -142,6 +159,9 @@ class ParticleClouds:
             _, ax = plt.subplots(figsize=figsize)
 
         x = getattr(self, feature)
+        
+        if 'num' in feature:
+            apply_map = None
 
         if apply_map == "mask_bool":
             x = x[self.mask_bool]
@@ -184,9 +204,9 @@ class ParticleClouds:
         ylim=None,
         alpha=0.5,
         xticks=[],
-        yticks=[], 
+        yticks=[],
         edgecolor=None,
-        lw=0.75
+        lw=0.75,
     ):
         eta = jets.eta_rel[idx]
         phi = jets.phi_rel[idx]
@@ -217,7 +237,6 @@ class ParticleClouds:
             label=r"$h^{0}$",
             edgecolors=edgecolor,
             linewidth=lw,
-
         )
         ax.scatter(
             eta[jets.isNegativeHadron[idx]],
@@ -229,8 +248,6 @@ class ParticleClouds:
             label=r"$h^{-}$",
             edgecolors=edgecolor,
             linewidth=lw,
-
-
         )
         ax.scatter(
             eta[jets.isPositiveHadron[idx]],
@@ -242,7 +259,6 @@ class ParticleClouds:
             label=r"$h^{+}$",
             edgecolors=edgecolor,
             linewidth=lw,
-
         )
         ax.scatter(
             eta[jets.isElectron[idx]],
@@ -254,7 +270,6 @@ class ParticleClouds:
             label=r"$e^{-}$",
             edgecolors=edgecolor,
             linewidth=lw,
-
         )
         ax.scatter(
             eta[jets.isPositron[idx]],
@@ -308,7 +323,6 @@ class ParticleClouds:
             alpha=0.5,
             color="forestgreen",
             linestyle="None",
-         
         )
         h3 = Line2D(
             [0],
@@ -318,7 +332,6 @@ class ParticleClouds:
             alpha=0.5,
             color="blue",
             linestyle="None",
-  
         )
         h4 = Line2D(
             [0],
@@ -379,7 +392,7 @@ class ParticleClouds:
                     r"$\mu^{-}$",
                     r"$\mu^{+}$",
                 ],
-                loc="center left",
+                loc="center",
                 bbox_to_anchor=(0.5, -0.25),
                 markerscale=2,
                 scatterpoints=1,
@@ -410,6 +423,7 @@ class ParticleClouds:
             )
         ax.set_facecolor(facecolor)  # Set the axis background color
 
+
 @dataclass
 class JetFeatures:
     """
@@ -420,17 +434,19 @@ class JetFeatures:
 
     def __post_init__(self):
         self.constituents = ParticleClouds(self.data)
-        self.px = self.constituents.px.sum(axis=-1)
-        self.py = self.constituents.py.sum(axis=-1)
-        self.pz = self.constituents.pz.sum(axis=-1)
-        self.e = self.constituents.e.sum(axis=-1)
-        self.pt = torch.sqrt(self.px**2 + self.py**2)
-        self.m = torch.sqrt(self.e**2 - self.pt**2 - self.pz**2)
-        self.eta = 0.5 * torch.log((self.pt + self.pz) / (self.pt - self.pz))
-        self.phi = torch.atan2(self.py, self.px)
         self.numParticles = torch.sum(self.constituents.mask, dim=1)
 
-        self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
+        if self.constituents.has_continuous:
+            self.px = self.constituents.px.sum(axis=-1)
+            self.py = self.constituents.py.sum(axis=-1)
+            self.pz = self.constituents.pz.sum(axis=-1)
+            self.e = self.constituents.e.sum(axis=-1)
+            self.pt = torch.sqrt(self.px**2 + self.py**2)
+            self.m = torch.sqrt(self.e**2 - self.pt**2 - self.pz**2)
+            self.eta = 0.5 * torch.log((self.pt + self.pz) / (self.pt - self.pz))
+            self.phi = torch.atan2(self.py, self.px)
+
+            self._substructure(R=0.8, beta=1.0, use_wta_scheme=True)
 
         if self.constituents.has_discrete:
             counts = self._get_flavor_counts()
@@ -454,6 +470,8 @@ class JetFeatures:
             self.numCharged = self.numChargedHadrons + self.numLeptons
 
             self.charge = self._jet_charge(kappa=0.0)
+        
+        if self.constituents.has_continuous and self.constituents.has_discrete:
             self.jet_charge = self._jet_charge(kappa=1.0)
 
     # plotting methods:
@@ -529,8 +547,11 @@ class JetFeatures:
     def _jet_charge(self, kappa):
         """jet charge defined as Q_j^kappa = Sum_i Q_i * (pT_i / pT_jet)^kappa"""
         charge = map_tokens_to_basis(self.constituents.discrete)[..., -1]
-        jet_charge = charge * (self.constituents.pt) ** kappa
-        return jet_charge.sum(axis=1) / (self.pt**kappa)
+        if kappa > 0:
+            jet_charge = charge * (self.constituents.pt) ** kappa
+            return jet_charge.sum(axis=1) / (self.pt**kappa)
+        else:
+            return charge.sum(axis=1)
 
     def _get_flavor_counts(self, return_fracs=False, vocab_size=8):
         num_jets = len(self.constituents)
@@ -548,13 +569,6 @@ class JetFeatures:
             flat_indices, minlength=num_jets * (vocab_size + 1)
         )
         count = token_counts.view(num_jets, vocab_size + 1)  # Reshape to (B, n + 1)
-        # fracs = token_counts / mask.sum(
-        #     dim=1, keepdim=True
-        # )  # Broadcast along the last dimension
-
-        # if return_fracs:
-        #     return fracs
-
         return count
 
     def plot_flavor_count_per_jet(
@@ -603,11 +617,11 @@ class JetFeatures:
             ax.plot(i, mu, marker, color=color[i], markersize=markersize, label=label)
 
         ax.set_xticks(x_positions)
-        ax.set_xticklabels(labels)
+        ax.set_xticklabels(labels, fontsize=12)
         ax.set_yscale("log")
         ax.set_ylim(1e-2, 5000)
-        ax.set_ylabel(r"$\langle N \rangle \pm 1\sigma$", fontsize=10)
-        ax.set_xlabel(r"particle flavor", fontsize=13)
+        ax.set_ylabel(r"$\langle N \rangle \pm 1\sigma$", fontsize=12)
+        ax.set_xlabel(r"particle flavor", fontsize=12)
 
     def _substructure(self, R=0.8, beta=1.0, use_wta_scheme=True):
         constituents_ak = ak.zip(

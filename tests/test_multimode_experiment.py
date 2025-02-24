@@ -12,7 +12,7 @@ log.warnings_off()
 
 @pytest.fixture
 def modality():
-    return "multi-modal"
+    return "discrete"
 
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def devices():
 
 
 def test_new_experiment_multimodal():
-    modality, devices = "multi-modal", [0, 1]
+    modality, devices = "discrete", [0, 1, 2, 3]
 
     OUTPUT_PATH = "/home/df630/Multimodal-Bridges/tests/output/multimodal-jets"
     CONFIG_PATH = (

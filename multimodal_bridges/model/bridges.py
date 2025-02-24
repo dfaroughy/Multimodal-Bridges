@@ -1,13 +1,12 @@
 import torch
 from torch.nn.functional import softmax
 from torch.distributions import Categorical
-from dataclasses import dataclass
 
 from tensorclass import TensorMultiModal
 from datamodules.datasets import DataCoupling
 
 
-class UniformLinearFlow:
+class UniformFlow:
     """Conditional OT Flow-Matching for continuous states.
     This bridge is a linear interpolation between boundaries states at t=0 and t=1.
     notation:
@@ -103,12 +102,15 @@ class TelegraphBridge:
         self.vocab_size = vocab_size
 
     def sample(self, t, batch: DataCoupling):
+
         k0 = batch.source.discrete
         k1 = batch.target.discrete
         transition_probs = self.transition_probability(t, k0, k1)
         drwan_state = Categorical(transition_probs).sample().to(k1.device)
+
         if drwan_state.dim() == 2:
             drwan_state = drwan_state.unsqueeze(-1)
+
         return drwan_state
 
     def rate(self, state: TensorMultiModal, heads: TensorMultiModal):
@@ -188,10 +190,12 @@ class TelegraphBridge:
 
     def forward_step(self, state, heads, delta_t, overflow='clamp'):
         """tau-leaping step for approx master equation solver"""
+
         rates = self.rate(state, heads)
         assert (rates >= 0).all(), "Negative rates!"
         state.discrete = state.discrete.squeeze(-1)
         max_rate = torch.max(rates, dim=2)[1]
+
         delta_n = torch.poisson(rates * delta_t).to(state.time.device) # all jumps
         jump_mask = torch.sum(delta_n, dim=-1).type_as(state.discrete) <= 1 # for categorical data
         diff = (
@@ -201,11 +205,14 @@ class TelegraphBridge:
             - state.discrete[:, :, None]
         )
         net_jumps = torch.sum(delta_n * diff, dim=-1).type_as(state.discrete)
+
         if overflow == "wrap":
             state.discrete = (state.discrete + net_jumps * jump_mask) % self.vocab_size
+
         elif overflow == "clamp":
             state.discrete += net_jumps * jump_mask
             state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
+
         state.discrete = state.discrete.unsqueeze(-1)
         return state, max_rate
 

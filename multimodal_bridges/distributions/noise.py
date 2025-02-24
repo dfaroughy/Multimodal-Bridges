@@ -63,7 +63,7 @@ class Noise:
         return metadata
 
 
-class GaussUniform:
+class SourceUniform:
     def __init__(self, config):
         self.config = config
 
@@ -89,8 +89,18 @@ class GaussUniform:
         else:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
 
-        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
-        discrete = torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
+        if self.config.data.modality == "discrete":
+            continuous = None
+            discrete = torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
+
+        elif self.config.data.modality == "continuous":
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = None
+
+        else:
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
+
         sample = TensorMultiModal(None, continuous, discrete, mask)
 
         return sample.to(device)
@@ -102,7 +112,7 @@ class GaussUniform:
         return metadata
 
 
-class GaussDegenerate:
+class SourceDegenerate:
     def __init__(self, config):
         self.config = config
 
@@ -128,8 +138,18 @@ class GaussDegenerate:
         else:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
 
-        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
-        discrete = torch.zeros((num_jets, max_num_particles, 1), dtype=torch.long)
+        if self.config.data.modality == "discrete":
+            continuous = None
+            discrete = torch.zeros((num_jets, max_num_particles, 1), dtype=torch.long)
+
+        elif self.config.data.modality == "continuous":
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = None
+            
+        else:
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = torch.zeros((num_jets, max_num_particles, 1), dtype=torch.long)
+
         sample = TensorMultiModal(None, continuous, discrete, mask)
 
         return sample.to(device)
@@ -141,7 +161,7 @@ class GaussDegenerate:
         return metadata
 
 
-class GaussMasked:
+class SourceMasked:
     def __init__(self, config):
         self.config = config
         self.vocab_size = self.config.data.vocab_size
@@ -166,8 +186,18 @@ class GaussMasked:
         else:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
 
-        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
-        discrete = 1 * torch.ones((num_jets, max_num_particles, 1))
+        if self.config.data.modality == "discrete":
+            continuous = None
+            discrete = -1 * torch.ones((num_jets, max_num_particles, 1))
+
+        elif self.config.data.modality == "continuous":
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = None
+            
+        else:
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = -1 * torch.ones((num_jets, max_num_particles, 1))
+
         sample = TensorMultiModal(None, continuous, discrete.long(), mask)
 
         return sample.to(device)
@@ -179,7 +209,7 @@ class GaussMasked:
         return metadata
 
 
-class GaussDataDriven:
+class SourceDataDriven:
     def __init__(self, config):
         self.config = config
 
@@ -205,7 +235,6 @@ class GaussDataDriven:
         else:
             mask = torch.ones((num_jets, max_num_particles, 1)).long()
 
-        continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
         datadriven_probs = [
             0.304,
             0.0847,
@@ -216,10 +245,22 @@ class GaussDataDriven:
             0.0011,
             0.001,
         ]
-        cat = Categorical(
-            torch.tensor(datadriven_probs),
-        )
-        discrete = cat.sample((num_jets, max_num_particles, 1))
+
+        if self.config.data.modality == "discrete":
+            continuous = None
+            cat = Categorical(torch.tensor(datadriven_probs),)
+            discrete = cat.sample((num_jets, max_num_particles, 1))
+
+        elif self.config.data.modality == "continuous":
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = None
+            
+        else:
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            cat = Categorical(torch.tensor(datadriven_probs),)
+            discrete = cat.sample((num_jets, max_num_particles, 1))
+
+
         sample = TensorMultiModal(None, continuous, discrete, mask)
 
         return sample.to(device)
