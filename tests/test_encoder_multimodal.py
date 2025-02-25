@@ -53,6 +53,7 @@ def test_EPiC_unimodal_discrete(dummy_batch, dummy_state):
     dummy_state.continuous = None
 
     config = ExperimentConfigs(CONFIG_PATH_DISCRETE)
+    # config.data.discrete_features = "onehot"
     embedder = MultiModalEmbedder(config)
     state_loc, state_glob = embedder(dummy_state, dummy_batch)
 
