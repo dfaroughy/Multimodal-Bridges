@@ -2,53 +2,11 @@ import torch
 import math
 from torch import nn
 from typing import Tuple
+import torch.nn.utils.weight_norm as wn
+import torch.nn.functional as F
 
 from tensorclass import TensorMultiModal
 from pipeline.helpers import SimpleLogger as log
-
-
-class EmbedMode(nn.Module):
-    """Embedding module for a single data mode.
-
-    Args:
-        embedding: Type of embedding ('Linear', 'MLP', etc.).
-        dim_input: Input dimension size.
-        dim_hidden: Hidden/output dimension size.
-    """
-
-    def __init__(self, embedding_type, dim_input=None, dim_hidden=None):
-        super().__init__()
-
-        if embedding_type == "Linear":
-            self.embedding = nn.Linear(dim_input, dim_hidden)
-
-        elif embedding_type == "MLP":
-            self.embedding = nn.Sequential(
-                nn.Linear(dim_input, dim_hidden),
-                nn.ReLU(),
-                nn.Linear(dim_hidden, dim_hidden),
-            )
-
-        elif embedding_type == "LookupTable":
-            self.embedding = nn.Embedding(dim_input, dim_hidden)
-
-        elif embedding_type == "LookupTableMLP":
-            self.embedding = nn.Sequential(
-                nn.Embedding(dim_input, dim_hidden),
-                nn.ReLU(),
-                nn.Linear(dim_hidden, dim_hidden),
-            )
-
-        elif embedding_type == "SinusoidalPositionalEncoding":
-            self.embedding = SinusoidalPositionalEncoding(dim_hidden, max_period=10000)
-
-        else:
-            NotImplementedError(
-                "Mode embedding not implemented, use `Linear`, `MLP`, `LookupTable`, `LookupTableMLP`, or `Sinusoidal`"
-            )
-
-    def forward(self, x):
-        return self.embedding(x)
 
 
 class MultiModalEmbedder(nn.Module):
@@ -70,126 +28,48 @@ class MultiModalEmbedder(nn.Module):
     def __init__(self, config):
         super(MultiModalEmbedder, self).__init__()
 
-        self.augmentation = config.encoder.data_augmentation
-        log.info("Local state augmented with source data", self.augmentation)
+        self.config = config
 
         # feats dimensions
-        dim_x = config.data.dim_continuous * (2 if self.augmentation else 1)
-        dim_k = config.data.dim_discrete
+        dim_x = config.data.dim_continuous
+        dim_k = config.data.vocab_size
         dim_emb_t = config.encoder.dim_emb_time
         dim_emb_x = config.encoder.dim_emb_continuous
         dim_emb_k = config.encoder.dim_emb_discrete
 
-        # context dimensions
-        dim_context_x = config.data.dim_context_continuous
-        dim_context_k = config.data.dim_context_discrete
-        dim_emb_context_x = config.encoder.dim_emb_context_continuous
-        dim_emb_context_k = config.encoder.dim_emb_context_discrete
-
         # Time embeddings
-        self.embedding_time = EmbedMode(
-            config.encoder.embed_type_time,
-            dim_hidden=dim_emb_t,
-        )
+        self.time_embedding = SinusoidalPositionalEncoding(dim_emb_t, max_period=10000)
 
         # Continuous embeddings
         if config.data.modality in ["continuous", "multi-modal"]:
-            if config.encoder.embed_type_continuous:
-                self.embedding_continuous = EmbedMode(
-                    config.encoder.embed_type_continuous,
-                    dim_input=dim_x,
-                    dim_hidden=dim_emb_x,
-                )
+            self.continuous_embedding = nn.Linear(dim_x, dim_emb_x)
 
         # Discrete embeddings
         if config.data.modality in ["discrete", "multi-modal"]:
-            if config.encoder.embed_type_discrete:
-                self.embedding_discrete = EmbedMode(
-                    config.encoder.embed_type_discrete,
-                    dim_input=config.data.vocab_size,
-                    dim_hidden=dim_emb_k,
-                )
-
-        # Context embeddings
-        if config.encoder.embed_type_context_continuous:
-            self.embedding_context_continuous = EmbedMode(
-                config.encoder.embed_type_context_continuous,
-                dim_input=dim_context_x,
-                dim_hidden=dim_context_x
-                if dim_emb_context_x == 0
-                else dim_emb_context_x,
-            )
-
-            log.warn(
-                f"setting dim_emb_context_continuous = {dim_context_x}",
-                dim_emb_context_x == 0,
-            )
-
-        if config.encoder.embed_type_context_discrete:
-            self.embedding_context_discrete = EmbedMode(
-                config.encoder.embed_type_context_discrete,
-                dim_input=config.data.vocab_size_context,
-                dim_hidden=dim_context_k
-                if dim_emb_context_k == 0
-                else dim_emb_context_k,
-            )
-
-            log.warn(
-                f"setting dim_emb_context_dicsrete = {dim_context_k}",
-                dim_emb_context_k == 0,
-            )
+            self.discrete_embedding = wn(nn.Embedding(dim_k, dim_emb_k))
 
     def forward(
         self, state: TensorMultiModal, batch: TensorMultiModal
     ) -> Tuple[TensorMultiModal, TensorMultiModal]:
 
         continuous_feats, discrete_feats = None, None
-        continuous_context, discrete_context = None, None
 
-        reshape = (*tuple(state.shape), -1)
-
-        # Embed time
-        t_emb = self.embedding_time(state.time.squeeze(-1))
+        t_emb = self.time_embedding(state.time.squeeze(-1))
         time_context = t_emb.clone().to(t_emb.device)  # (B, dim_time_emb)
         time = t_emb.unsqueeze(1).repeat(1, state.shape[-1], 1)  # (B, N, dim_time_emb)
 
-        # Embed features
         if state.has_continuous:
-            continuous_feats = state.continuous
-            if hasattr(self, "embedding_continuous"):
-                continuous_feats = self.embedding_continuous(continuous_feats)
+            continuous_feats = self.continuous_embedding(state.continuous)
 
         if state.has_discrete:
-            discrete_feats = state.discrete
-            if hasattr(self, "embedding_discrete"):
-                discrete_feats = self.embedding_discrete(discrete_feats).view(*reshape)
+            discrete_feats = self.discrete_embedding(state.discrete).squeeze(-2)
 
         state_loc = TensorMultiModal(time, continuous_feats, discrete_feats, state.mask)
         state_loc.apply_mask()
-
-        # Embed context
-        if batch.has_context:
-            reshape = (*tuple(batch.context.shape), -1)
-
-            if batch.context.has_continuous:
-                continuous_context = batch.context.continuous
-                if hasattr(self, "embedding_context_continuous"):
-                    continuous_context = self.embedding_context_continuous(
-                        continuous_context
-                    )
-
-            if batch.context.has_discrete:
-                discrete_context = batch.context.discrete
-                if hasattr(self, "embedding_context_discrete"):
-                    discrete_context = self.embedding_context_discrete(
-                        discrete_context
-                    ).view(reshape)
-
-        state_glob = TensorMultiModal(
-            time_context, continuous_context, discrete_context, None
-        )
+        state_glob = TensorMultiModal(time=time_context)
 
         return state_loc, state_glob
+
 
 
 class SinusoidalPositionalEncoding(nn.Module):
