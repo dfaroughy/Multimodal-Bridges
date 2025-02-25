@@ -70,7 +70,12 @@ class JetGeneratorCallback(Callback):
         paths = self._postprocess(paths, transform=self.transform)
         paths.save_to(f"{self.data_dir}/paths_sample.h5")
         gen_states = paths[-1]
-        print(gen_states.shape, gen_states.continuous, gen_states.discrete.shape, gen_states.available_modes())
+        print(
+            gen_states.shape,
+            gen_states.continuous,
+            gen_states.discrete.shape,
+            gen_states.available_modes(),
+        )
         gen_jets = JetFeatures(gen_states)
 
         test_list = [TensorMultiModal.load_from(str(f)) for f in test_files]
@@ -112,17 +117,15 @@ class JetGeneratorCallback(Callback):
             paths.continuous[:, :, 0] = torch.exp(paths.continuous[:, :, 0]) - 1e-6
 
         if self.config.data.discrete_features == "onehot":
-
-            paths.discrete = paths.continuous.clone()[..., -self.config.data.vocab_size :]
+            paths.discrete = paths.continuous.clone()[
+                ..., -self.config.data.vocab_size :
+            ]
             paths.discrete = torch.argmax(paths.discrete, dim=-1).unsqueeze(-1)
             paths.continuous = paths.continuous[..., : -self.config.data.vocab_size]
             if paths.continuous.shape[-1] == 0:
-                del paths.continuous        
-
-        # print(paths.shape, paths.continuous, paths.discrete.shape)
+                del paths.continuous
 
         paths.apply_mask()
-
         return paths
 
     def _clean_temp_files(self):
@@ -345,7 +348,6 @@ class JetGeneratorCallback(Callback):
                     discrete=True,
                     xlabel=r"$N_{\mu^+}$",
                 ),
-
                 "electric charges": self.plot_charges(gen_jets, test_jets),
                 "flavor counts avg": self.plot_flavor_counts_per_jet(
                     gen_jets, test_jets
@@ -528,30 +530,9 @@ class JetGeneratorCallback(Callback):
             stat="density",
             xlim=(-1.2, 1.2),
         )
-        # test.histplot(
-        #     f"num{flavor}s",
-        #     ax=ax[3],
-        #     fill=False,
-        #     discrete=True,
-        #     lw=1,
-        #     color="k",
-        #     log_scale=(False, False),
-        #     stat="density",
-        # )
-        # gen.histplot(
-        #     f"num{flavor}s",
-        #     ax=ax[3],
-        #     fill=False,
-        #     discrete=True,
-        #     lw=1,
-        #     color="crimson",
-        #     log_scale=(False, False),
-        #     stat="density",
-        # )
         ax[0].set_xlabel(rf"$p_T^{flavor_labels[flavor]}$")
         ax[1].set_xlabel(rf"$\eta^{flavor_labels[flavor]}$")
         ax[2].set_xlabel(rf"$\phi^{flavor_labels[flavor]}$")
-        # ax[3].set_xlabel(rf"$N_{flavor_labels[flavor]}$")
         ax[0].set_ylabel("density")
 
         plt.tight_layout()

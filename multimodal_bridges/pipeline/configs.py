@@ -58,20 +58,15 @@ class EncoderConfig:
     dim_emb_discrete: Optional[int] = 0
     dim_emb_context_continuous: Optional[int] = 0
     dim_emb_context_discrete: Optional[int] = 0
-    # embed_type_time: Optional[str] = "SinusoidalPositionalEncoding"
-    # embed_type_continuous: Optional[str] = None
-    # embed_type_discrete: Optional[str] = None
-    # embed_type_context_continuous: Optional[str] = None
-    # embed_type_context_discrete: Optional[str] = None
 
 
 @dataclass
 class TrainerConfig:
     max_epochs: int
     optimizer_name: str
-    scheduler_name: Optional[str]
     optimizer_params: Dict[str, Union[float, List[float], bool]]
-    scheduler_params: Optional[Dict[str, Union[float, List[float], bool]]]
+    scheduler_name: Optional[str] = None
+    scheduler_params: Optional[Dict[str, Union[float, List[float], bool]]] = None
     gradient_clip_val: float = 1.0
 
 
@@ -107,29 +102,22 @@ class ExperimentConfigs:
     comet_logger: CometLoggerConfig = field(default_factory=CometLoggerConfig)
 
     def __init__(self, config):
-
         self._load_config(config)
         assert self.encoder.dim_emb_time > 0, "Non-zero dim_emb_time must be provided."
-        
+
         if self.data.continuous_features is not None:
             self.data.dim_continuous = len(self.data.continuous_features)
-        
+
         if self.data.discrete_features is not None:
-            assert self.data.vocab_size > 0, "vocab_size must be provided for discrete features"
+            assert self.data.vocab_size > 0, (
+                "vocab_size must be provided for discrete features"
+            )
 
         if self.data.discrete_features == "onehot":
             self.data.dim_continuous += self.data.vocab_size
 
         if self.data.modality == "multi-modal" or self.data.modality == "discrete":
-            self.data.dim_discrete = 1        
-            # if self.data.discrete_features == "tokens":
-            #     self.encoder.embed_type_discrete = "LookupTable"
-            #     assert self.encoder.dim_emb_discrete > 0, "Non-zero dim_emb_discrete must be provided for lookup table."
-
-        # if self.encoder.dim_emb_continuous > self.data.dim_continuous:
-        #     self.encoder.embed_type_continuous = "Linear"
-        # else:
-        #     self.encoder.dim_emb_continuous = self.data.dim_continuous
+            self.data.dim_discrete = 1
 
     def update(self, config):
         if isinstance(config, dict):

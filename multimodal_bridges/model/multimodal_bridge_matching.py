@@ -135,11 +135,13 @@ class MultiModalBridgeMatching(L.LightningModule):
         optimizer = Optimizer[self.config.trainer.optimizer_name](
             self.parameters(), **self.config.trainer.optimizer_params
         )
-
-        scheduler = Scheduler[self.config.trainer.scheduler_name](
-            optimizer, **self.config.trainer.scheduler_params
-        )
-        return [optimizer], [scheduler]
+        if self.config.trainer.scheduler_name:
+            scheduler = Scheduler[self.config.trainer.scheduler_name](
+                optimizer, **self.config.trainer.scheduler_params
+            )
+            return [optimizer], [scheduler]
+        else:
+            return optimizer
 
     # ...Model functions
 
@@ -185,7 +187,6 @@ class MultiModalBridgeMatching(L.LightningModule):
         time = self.reshape_time_dim_like(t, batch)
 
         # sample source/target data if necessary:
-
         if not batch.has_source:
             batch.source = self.sample_source(
                 shape=batch.target.shape, device=self.device
@@ -197,7 +198,6 @@ class MultiModalBridgeMatching(L.LightningModule):
             )
 
         # sample bridge paths:
-
         if batch.target.has_continuous:
             continuous = self.bridge_continuous.sample(time, batch)
 
