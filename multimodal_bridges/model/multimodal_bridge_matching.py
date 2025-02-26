@@ -42,6 +42,7 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         self.loss_multimode = MultiModeLoss(mode=config.model.loss_weights)
         self.save_hyperparameters()
+        self.path_snapshots_idx = config.model.save_path_history_snapshots
 
         # if source/target data not provided, sample from provided distributions:
 
@@ -221,7 +222,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         time_steps = torch.linspace(eps, 1.0 - eps, steps, device=self.device)
         delta_t = (time_steps[-1] - time_steps[0]) / (len(time_steps) - 1)
 
-        paths = [state.clone()]
+        paths = [state.clone()] # append t=0 source
 
         for i, t in enumerate(time_steps):
             state.time = torch.full((len(batch), 1), t.item(), device=self.device)
@@ -237,13 +238,15 @@ class MultiModalBridgeMatching(L.LightningModule):
 
             state.time = state.time.unsqueeze(1).repeat(1, state.shape[-1], 1)
 
-            paths.append(state.clone())
+            if isinstance(self.path_snapshots_idx, list):
+                for i in self.path_history_idx:
+                    paths.append(state.clone())
 
         if heads.has_discrete:
             # replace last timestep with argmax of final rates
             state.discrete = max_rate.unsqueeze(-1)  
 
-        paths.append(state)
+        paths.append(state)  # append t=1 generated target
         paths = TensorMultiModal.stack(paths, dim=0)
         return paths
 
