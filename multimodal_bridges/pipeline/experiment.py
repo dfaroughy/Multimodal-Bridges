@@ -186,33 +186,16 @@ class ExperimentPipeline:
         """
         Configure and return the necessary callbacks for training.
         """
-
         callbacks = []
         callbacks.append(RichProgressBar(theme=RichProgressBarTheme(**progress_bar)))
         callbacks.append(ModelCheckpointCallback(self.config))
-        
-        if self.config.data.modality == "multi-modal":
-        
-            callbacks.append(
-                ModelCheckpoint(
-                    monitor="val_loss_continuous",
-                    mode="min",
-                    save_top_k=3,
-                    filename="best-{epoch:02d}-{val_loss_continuous:.4f}",
-                    save_last=False,
-                )
-            )
-        
-            callbacks.append(
-                ModelCheckpoint(
-                    monitor="val_loss_discrete",
-                    mode="min",
-                    save_top_k=3,
-                    filename="best-{epoch:02d}-{val_loss_discrete:.4f}",
-                    save_last=False,
-                )
-            )
-        
+        if self.config.checkpoints.patience:
+            callbacks.append(EarlyStopping(monitor=self.config.checkpoints.monitor, 
+                                        mode=self.config.checkpoints.mode,
+                                        patience=self.config.checkpoints.patience,
+                                        stopping_threshold=self.config.checkpoints.stopping_threshold,
+                                        check_finite=True
+                                            ))
         callbacks.append(ExperimentLoggerCallback(self.config))
         callbacks.append(JetGeneratorCallback(self.config))
 

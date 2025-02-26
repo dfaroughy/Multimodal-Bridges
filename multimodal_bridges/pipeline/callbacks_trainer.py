@@ -19,11 +19,14 @@ class ModelCheckpointCallback(ModelCheckpoint):
     def __init__(self, config: ExperimentConfigs):
         """
         Initialize the callback using a configuration object.
-
         Args:
             config (ExperimentConfigs): The configuration object containing checkpoint settings.
         """
-        super().__init__(**config.checkpoints.__dict__)
+        args = config.checkpoints.__dict__.copy()
+        del args['patience']
+        del args['stopping_threshold']
+
+        super().__init__(**args)
 
 
 class ExperimentLoggerCallback(Callback):

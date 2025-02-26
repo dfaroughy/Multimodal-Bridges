@@ -79,6 +79,7 @@ class ModelConfig:
     loss_weights: Optional[str] = "fixed"
     num_timesteps: int = None
     time_eps: float = 0.0
+    save_path_history_snapshots: Optional[List[int]] = None
 
 
 @dataclass
@@ -89,6 +90,8 @@ class CheckpointsConfig:
     save_top_k: int = 1
     filename: str = "best"
     save_last: bool = True
+    patience: Optional[int] = None
+    stopping_threshold: Optional[float] = None
 
 
 @dataclass
