@@ -188,7 +188,7 @@ class TelegraphBridge:
         prob = 1.0 / S + w_t[:, None, None] * ((-1.0 / S) + kronecker)
         return prob
 
-    def forward_step(self, state, heads, delta_t, overflow='clamp'):
+    def forward_step(self, state, heads, delta_t, overflow='wrap'):
         """tau-leaping step for approx master equation solver"""
 
         rates = self.rate(state, heads)
@@ -215,6 +215,60 @@ class TelegraphBridge:
 
         state.discrete = state.discrete.unsqueeze(-1)
         return state, max_rate
+
+    def forward_adaptive_step(self, state, heads, delta_t, epsilon=0.55, overflow="wrap"):
+        """Adaptive tau-leaping step for approximate master equation solver.
+        
+        Parameters:
+        - state: Current state (discrete values).
+        - heads: Model logits determining transition probabilities.
+        - delta_t_max: Maximum allowable step size.
+        - epsilon: Control parameter for adaptivity (recommended ~0.03).
+        - overflow: How to handle state transitions (wrap or clamp).
+        
+        Returns:
+        - Updated state with adaptive step size.
+        - Chosen step size delta_t.
+        """
+
+        rates = self.rate(state, heads)
+        assert (rates >= 0).all(), "Negative rates!"
+
+        state.discrete = state.discrete.squeeze(-1)
+        max_rate = torch.max(rates, dim=2)[1]
+
+        # Compute the total event rate for each batch element
+        total_rates = torch.sum(rates, dim=-1, keepdim=True)  # (B, N, 1)
+
+        # Determine adaptive delta_t based on max allowable change per step
+        tau = epsilon / (total_rates + 1e-10)  # Small epsilon to avoid division by zero
+        delta_t = torch.min(tau, torch.full_like(tau, delta_t))  # Limit to max step
+
+        # Generate Poisson-distributed jumps
+        delta_n = torch.poisson(rates * delta_t).to(state.time.device)  # (B, N, vocab_size)
+        
+        # Ensure at most one jump occurs in a single time step (for categorical data)
+        jump_mask = torch.sum(delta_n, dim=-1).type_as(state.discrete) <= 1  # (B, N)
+
+        # Compute net jumps using the difference of indices
+        diff = (
+            torch.arange(self.vocab_size, device=state.time.device).view(1, 1, self.vocab_size)
+            - state.discrete[:, :, None]
+        )
+        net_jumps = torch.sum(delta_n * diff, dim=-1).type_as(state.discrete)  # (B, N)
+
+        # Update state based on overflow handling
+        if overflow == "wrap":
+            state.discrete = (state.discrete + net_jumps * jump_mask) % self.vocab_size
+        elif overflow == "clamp":
+            state.discrete += net_jumps * jump_mask
+            state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
+
+        state.discrete = state.discrete.unsqueeze(-1)  # Maintain proper shape
+
+        return state, max_rate
+
+
 
 
 right_shape = lambda x: x if len(x.shape) == 3 else x[:, :, None]
