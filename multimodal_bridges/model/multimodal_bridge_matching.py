@@ -232,7 +232,7 @@ class MultiModalBridgeMatching(L.LightningModule):
                 state = self.bridge_continuous.forward_step(state, heads, delta_t)
 
             if heads.has_discrete:
-                state, max_rate = self.bridge_discrete.forward_step(
+                state, rates = self.bridge_discrete.forward_step(
                     state, heads, delta_t
                 )
 
@@ -245,6 +245,7 @@ class MultiModalBridgeMatching(L.LightningModule):
         # replace last timestep with argmax of final rates
 
         if heads.has_discrete:
+            max_rate = torch.max(rates, dim=2)[1]
             state.discrete = max_rate.unsqueeze(-1)  
 
         paths.append(state)  # append t=1 generated target

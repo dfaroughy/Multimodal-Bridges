@@ -191,72 +191,24 @@ class TelegraphBridge:
 
     def forward_step(self, state, heads, delta_t, method="midpoint"):
 
+        rates = self.rate(state, heads)
+
         if method == "tau-leaping":
-            state, max_rate = self._tauleap(state, heads, delta_t)
+            state = self._tauleap(state, rates, delta_t)
 
         elif method == "explicit_euler":
-            state, max_rate = self._explicit_euler(state, heads, delta_t)
+            state = self._explicit_euler(state, rates, delta_t)
 
         elif method == "midpoint":
             state_mid = state.clone()
-            state_mid, _ = self._explicit_euler(state_mid, heads, 0.5*delta_t)
-            state, max_rate = self._tauleap(state_mid, heads, delta_t)
+            state_mid, _ = self._explicit_euler(state_mid, rates, 0.5*delta_t)
+            state = self._tauleap(state_mid, rates, delta_t)
             del state_mid
 
         else:
             raise ValueError(f"Unknown solver method: {method}")
         
-        return state, max_rate
-
-    def _tauleap(self, state, heads, delta_t, overflow="wrap"):
-
-        # rates
-        rates = self.rate(state, heads)
-        max_rate = torch.max(rates, dim=2)[1]
-
-        state.discrete = state.discrete.squeeze(-1)
-
-        delta_n = torch.poisson(rates * delta_t).to(state.time.device) # all jumps
-        jump_mask = torch.sum(delta_n, dim=-1).type_as(state.discrete) <= 1 # for categorical data
-        
-        diff = (
-            torch.arange(self.vocab_size, device=state.time.device).view(
-                1, 1, self.vocab_size
-            )
-            - state.discrete[:, :, None]
-        )
-        net_jumps = torch.sum(delta_n * diff, dim=-1).type_as(state.discrete)
-
-        # take step
-
-        if overflow == "wrap":
-            state.discrete = (state.discrete + net_jumps * jump_mask) % self.vocab_size
-            state.discrete = state.discrete.unsqueeze(-1)
-            return state, max_rate
-
-        elif overflow == "clamp":
-            state.discrete += net_jumps * jump_mask
-            state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
-            state.discrete = state.discrete.unsqueeze(-1)
-            return state, max_rate
-
-    def _explicit_euler(self, state, heads, delta_t):
-
-        # rates
-        rates = self.rate(state, heads)
-        max_rate = torch.max(rates, dim=2)[1]
-
-        # off diagonal probs:
-        state.discrete = state.discrete.squeeze(-1)
-        delta_p = (rates * delta_t).clamp(max=1.0) 
-        
-        # diagonal probs:
-        delta_p.scatter_(-1, state.discrete[:, :, None], 0.0)
-        delta_p.scatter_(-1, state.discrete[:, :, None], (1.0 - delta_p.sum(dim=-1,keepdim=True)).clamp(min=0.0))
-
-        state.discrete = Categorical(delta_p).sample()
-        state.discrete = state.discrete.unsqueeze(-1)
-        return state, max_rate
+        return state, rates
 
 
 right_shape = lambda x: x if len(x.shape) == 3 else x[:, :, None]
