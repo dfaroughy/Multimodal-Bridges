@@ -168,7 +168,7 @@ class SourceMasked:
         self.dim_continuous = self.config.data.dim_continuous
         self.metadata = self._load_metadata(self.config.data.target_path)
 
-    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+    def __call__(self, shape, device, sample_masks=False, inference_mode=False) -> TensorMultiModal:
         num_jets, max_num_particles = shape
 
         if sample_masks:
@@ -189,6 +189,8 @@ class SourceMasked:
         if self.config.data.modality == "discrete":
             continuous = None
             discrete = -1 * torch.ones((num_jets, max_num_particles, 1))
+            if inference_mode:
+                discrete = torch.zeros((num_jets, max_num_particles, 1))
 
         elif self.config.data.modality == "continuous":
             continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))

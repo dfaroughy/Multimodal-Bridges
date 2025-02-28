@@ -5,6 +5,7 @@ from typing import List, Union
 import lightning.pytorch as L
 from lightning.pytorch.callbacks import RichProgressBar, ModelCheckpoint
 from lightning.pytorch.callbacks.progress.rich_progress import RichProgressBarTheme
+from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.utilities import rank_zero_only
 
 from pipeline.configs import ExperimentConfigs, progress_bar
@@ -189,13 +190,15 @@ class ExperimentPipeline:
         callbacks = []
         callbacks.append(RichProgressBar(theme=RichProgressBarTheme(**progress_bar)))
         callbacks.append(ModelCheckpointCallback(self.config))
+
         if self.config.checkpoints.patience:
             callbacks.append(EarlyStopping(monitor=self.config.checkpoints.monitor, 
-                                        mode=self.config.checkpoints.mode,
-                                        patience=self.config.checkpoints.patience,
-                                        stopping_threshold=self.config.checkpoints.stopping_threshold,
-                                        check_finite=True
-                                            ))
+                                           mode=self.config.checkpoints.mode,
+                                           patience=self.config.checkpoints.patience,
+                                           stopping_threshold=self.config.checkpoints.stopping_threshold,
+                                           check_finite=True
+                                                ))
+                                                
         callbacks.append(ExperimentLoggerCallback(self.config))
         callbacks.append(JetGeneratorCallback(self.config))
 
