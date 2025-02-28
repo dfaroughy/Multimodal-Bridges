@@ -189,23 +189,36 @@ class TelegraphBridge:
         prob = 1.0 / S + w_t[:, None, None] * ((-1.0 / S) + kronecker)
         return prob
 
-    def forward_step(self, state, heads, delta_t, overflow='wrap'):
-        """tau-leaping step for approx master equation solver"""
+    def forward_step(self, state, heads, delta_t, method="midpoint"):
 
-        rates = self.rate(state, heads)
-        assert (rates >= 0).all(), "Negative rates!"
-        state.discrete = state.discrete.squeeze(-1)
-        max_rate = torch.max(rates, dim=2)[1]
+        if method == "tau-leaping":
+            state, max_rate = self._tauleap(state, heads, delta_t)
 
-        # state.discrete = self._tauleap(state, delta_t, rates)
-        state.discrete = self._explicit_euler(state, delta_t, rates)
+        elif method == "explicit_euler":
+            state, max_rate = self._explicit_euler(state, heads, delta_t)
+
+        elif method == "midpoint":
+            state_mid = state.clone()
+            state_mid, _ = self._explicit_euler(state_mid, heads, 0.5*delta_t)
+            state, max_rate = self._tauleap(state_mid, heads, delta_t)
+            del state_mid
+
+        else:
+            raise ValueError(f"Unknown solver method: {method}")
         
-        state.discrete = state.discrete.unsqueeze(-1)
         return state, max_rate
 
-    def _tauleap(self, state, delta_t, rates, overflow="wrap"):
+    def _tauleap(self, state, heads, delta_t, overflow="wrap"):
+
+        # rates
+        rates = self.rate(state, heads)
+        max_rate = torch.max(rates, dim=2)[1]
+
+        state.discrete = state.discrete.squeeze(-1)
+
         delta_n = torch.poisson(rates * delta_t).to(state.time.device) # all jumps
         jump_mask = torch.sum(delta_n, dim=-1).type_as(state.discrete) <= 1 # for categorical data
+        
         diff = (
             torch.arange(self.vocab_size, device=state.time.device).view(
                 1, 1, self.vocab_size
@@ -214,26 +227,36 @@ class TelegraphBridge:
         )
         net_jumps = torch.sum(delta_n * diff, dim=-1).type_as(state.discrete)
 
+        # take step
+
         if overflow == "wrap":
-            return (state.discrete + net_jumps * jump_mask) % self.vocab_size
+            state.discrete = (state.discrete + net_jumps * jump_mask) % self.vocab_size
+            state.discrete = state.discrete.unsqueeze(-1)
+            return state, max_rate
 
         elif overflow == "clamp":
             state.discrete += net_jumps * jump_mask
-            return torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
+            state.discrete = torch.clamp(state.discrete, min=0, max=self.vocab_size - 1)
+            state.discrete = state.discrete.unsqueeze(-1)
+            return state, max_rate
 
+    def _explicit_euler(self, state, heads, delta_t):
 
-    def _explicit_euler(self, state, delta_t, rates):
+        # rates
+        rates = self.rate(state, heads)
+        max_rate = torch.max(rates, dim=2)[1]
+
         # off diagonal probs:
+        state.discrete = state.discrete.squeeze(-1)
         delta_p = (rates * delta_t).clamp(max=1.0) 
         
         # diagonal probs:
         delta_p.scatter_(-1, state.discrete[:, :, None], 0.0)
         delta_p.scatter_(-1, state.discrete[:, :, None], (1.0 - delta_p.sum(dim=-1,keepdim=True)).clamp(min=0.0))
 
-        return Categorical(delta_p).sample() 
-
-
-
+        state.discrete = Categorical(delta_p).sample()
+        state.discrete = state.discrete.unsqueeze(-1)
+        return state, max_rate
 
 
 right_shape = lambda x: x if len(x.shape) == 3 else x[:, :, None]

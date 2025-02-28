@@ -242,8 +242,9 @@ class MultiModalBridgeMatching(L.LightningModule):
                 for i in self.path_history_idx:
                     paths.append(state.clone())
 
+        # replace last timestep with argmax of final rates
+
         if heads.has_discrete:
-            # replace last timestep with argmax of final rates
             state.discrete = max_rate.unsqueeze(-1)  
 
         paths.append(state)  # append t=1 generated target
