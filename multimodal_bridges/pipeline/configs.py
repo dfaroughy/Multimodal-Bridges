@@ -74,6 +74,8 @@ class TrainerConfig:
 class ModelConfig:
     bridge_continuous: Optional[str] = None
     bridge_discrete: Optional[str] = None
+    solver_continuous: Optional[str] = None
+    solver_discrete: Optional[str] = None
     sigma: Optional[float] = None
     gamma: Optional[float] = None
     loss_weights: Optional[str] = "fixed"

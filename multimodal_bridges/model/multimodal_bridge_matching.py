@@ -13,7 +13,7 @@ from pipeline.registry import registered_schedulers as Scheduler
 from tensorclass import TensorMultiModal
 from datamodules.datasets import DataCoupling
 from encoders.embedder import MultiModalEmbedder
-
+from model.solvers import ContinuousSolver, DiscreteSolver
 
 class MultiModalBridgeMatching(L.LightningModule):
     """Bridge-Matching model for multi-modal data"""
@@ -215,38 +215,29 @@ class MultiModalBridgeMatching(L.LightningModule):
         """generate target data from source input using trained dynamics
         returns the final state of the bridge at the end of the time interval
         """
-
         eps = self.config.model.time_eps  # min time resolution
         steps = self.config.model.num_timesteps
-
         time_steps = torch.linspace(eps, 1.0 - eps, steps, device=self.device)
         delta_t = (time_steps[-1] - time_steps[0]) / (len(time_steps) - 1)
 
-        paths = [state.clone()] # append t=0 source
+        solver_continuous = ContinuousSolver(self.config, model=self)
+        solver_discrete = DiscreteSolver(self.config, model=self)
+
+        paths = [state.clone()]  # append t=0 source
 
         for i, t in enumerate(time_steps):
             state.time = torch.full((len(batch), 1), t.item(), device=self.device)
-            heads = self.forward(state, batch)
-
-            if heads.has_continuous:
-                state = self.bridge_continuous.forward_step(state, heads, delta_t)
-
-            if heads.has_discrete:
-                state, rates = self.bridge_discrete.forward_step(
-                    state, heads, delta_t
-                )
-
-            state.time = state.time.unsqueeze(1).repeat(1, state.shape[-1], 1)
+            state = solver_continuous.fwd_step(state, batch, delta_t)
+            state, rates = solver_discrete.fwd_step(state, batch, delta_t)
+            state.broadcast_time() # (B,1) -> (B,D,1)
 
             if isinstance(self.path_snapshots_idx, list):
                 for i in self.path_history_idx:
                     paths.append(state.clone())
 
-        # replace last timestep with argmax of final rates
-
-        if heads.has_discrete:
+        if state.has_discrete:
             max_rate = torch.max(rates, dim=2)[1]
-            state.discrete = max_rate.unsqueeze(-1)  
+            state.discrete = max_rate.unsqueeze(-1)
 
         paths.append(state)  # append t=1 generated target
         paths = TensorMultiModal.stack(paths, dim=0)

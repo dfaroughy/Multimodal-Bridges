@@ -5,7 +5,6 @@ from torch.distributions import Categorical
 from tensorclass import TensorMultiModal
 from datamodules.datasets import DataCoupling
 
-
 class UniformFlow:
     """Conditional OT Flow-Matching for continuous states.
     This bridge is a linear interpolation between boundaries states at t=0 and t=1.
@@ -40,11 +39,6 @@ class UniformFlow:
     def diffusion(self, state: TensorMultiModal):
         return 0.0
 
-    def forward_step(self, state, heads, delta_t):
-        """Euler step for ODE solver"""
-        state.continuous += delta_t * heads.continuous
-        return state
-
 
 class SchrodingerBridge:
     """Schrodinger bridge for continuous states
@@ -78,15 +72,9 @@ class SchrodingerBridge:
         return A * xt + B * x1 + C * x0
 
     def diffusion(self, state: TensorMultiModal):
+        state.broadcast_time()
         t = state.time
         return self.sigma * torch.sqrt(t * (1.0 - t))
-
-    def forward_step(self, state: TensorMultiModal, heads: TensorMultiModal, delta_t):
-        """Euler-Maruyama step for SDE solver"""
-        diffusion = self.diffusion(delta_t)
-        delta_w = torch.randn_like(state.continuous)
-        state.continuous += delta_t * state.continuous + diffusion * delta_w
-        return state
 
 
 class TelegraphBridge:
@@ -188,27 +176,6 @@ class TelegraphBridge:
         kronecker = (k_out == k_in).float()
         prob = 1.0 / S + w_t[:, None, None] * ((-1.0 / S) + kronecker)
         return prob
-
-    def forward_step(self, state, heads, delta_t, method="midpoint"):
-
-        rates = self.rate(state, heads)
-
-        if method == "tau-leaping":
-            state = self._tauleap(state, rates, delta_t)
-
-        elif method == "explicit_euler":
-            state = self._explicit_euler(state, rates, delta_t)
-
-        elif method == "midpoint":
-            state_mid = state.clone()
-            state_mid, _ = self._explicit_euler(state_mid, rates, 0.5*delta_t)
-            state = self._tauleap(state_mid, rates, delta_t)
-            del state_mid
-
-        else:
-            raise ValueError(f"Unknown solver method: {method}")
-        
-        return state, rates
 
 
 right_shape = lambda x: x if len(x.shape) == 3 else x[:, :, None]
