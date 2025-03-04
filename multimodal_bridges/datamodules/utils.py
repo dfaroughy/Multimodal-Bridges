@@ -102,6 +102,8 @@ class ParticleClouds:
                 "Lepton", selection=(self.discrete.squeeze(-1) > 3)
             )
 
+
+
     def _flavored_kinematics(self, name, selection):
         if self.data.has_discrete:
             setattr(self, f"is{name}", selection * self.mask_bool)

@@ -86,13 +86,24 @@ class TensorMultiModal:
             return True
         return False
 
-    def apply_mask(self):
+    def broadcast_time(self):
+        """repeat & broadcast time tensor to same shape as continuous/discrete
+        (B,1) -> (B,D,1)
+        """
+        D = self.shape[-1]
+        self.time = self.time.unsqueeze(1).repeat(1, D, 1)
+
+    def apply_mask(self, condition=None):
         if "time" in self.available_modes():
-            self.time *= self.mask
+            self.time *= self.mask if condition is None else condition
         if "continuous" in self.available_modes():
-            self.continuous *= self.mask
+            self.continuous *= self.mask if condition is None else condition
         if "discrete" in self.available_modes():
-            self.discrete = (self.discrete * self.mask).long()
+            self.discrete = (
+                (self.discrete * self.mask).long()
+                if condition is None
+                else (self.discrete * condition).long()
+            )
 
     @classmethod
     def load_from(cls, path, device=None, transform=None) -> "TensorMultiModal":
