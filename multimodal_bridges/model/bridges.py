@@ -2,6 +2,7 @@ import torch
 from torch.nn.functional import softmax
 from torch.distributions import Categorical
 
+from pipeline.registry import registered_thermostats as Thermostat
 from tensorclass import TensorMultiModal
 from datamodules.datasets import DataCoupling
 
@@ -85,10 +86,11 @@ class TelegraphBridge:
     - k: discrete state at time t
     """
 
-    def __init__(self, gamma, vocab_size, beta_fn='constant'):
+    def __init__(self, gamma, vocab_size, time_eps=0.0, thermostat_fn='ConstantThermostat':
         self.gamma = gamma
         self.vocab_size = vocab_size
-        self.beta_fn = beta_fn
+        self.thermostat = Thermostat[thermostat_fn](vocab_size)
+        self.time_eps = time_eps
 
     def sample(self, t, batch: DataCoupling):
 
@@ -123,10 +125,12 @@ class TelegraphBridge:
 
         # ...Telegraph process rates:
 
-        t, t1 = t.squeeze(), 1.0
+        t, t1 = t.squeeze(), 1.0 - self.time_eps
 
-        if self.beta_fn == 'constant':
-            wt = torch.exp(-self.vocab_size * self.gamma * (t1 - t))
+        # if self.beta_fn == 'constant':
+            # wt = torch.exp(-self.vocab_size * self.gamma * (t1 - t))
+        
+        wt = self.thermostat.w_ts(t, t1)
 
         A = 1.0
         B = (wt * self.vocab_size) / (1.0 - wt)
@@ -155,9 +159,9 @@ class TelegraphBridge:
         k = k.to(k0.device)
 
         # ...compute probabilities:
-        p_k_to_k1 = self.conditional_probability(t, 1.0, k, k1)
-        p_k0_to_k = self.conditional_probability(0.0, t, k0, k)
-        p_k0_to_k1 = self.conditional_probability(0.0, 1.0, k0, k1)
+        p_k_to_k1 = self.conditional_probability(t, 1.0 - self.time_eps, k, k1)
+        p_k0_to_k = self.conditional_probability(self.time_eps, t, k0, k)
+        p_k0_to_k1 = self.conditional_probability(self.time_eps, 1.0 - self.time_eps, k0, k1)
 
         return (p_k_to_k1 * p_k0_to_k) / p_k0_to_k1
 
@@ -175,8 +179,10 @@ class TelegraphBridge:
         t_out = right_time_size(t_out, k_out).to(k_in.device)
         t_in = right_time_size(t_in, k_out).to(k_in.device)
         
-        if self.beta_fn == 'constant':
-            w_t = torch.exp(-self.vocab_size * self.gamma * (t_out - t_in))
+        # if self.beta_fn == 'constant':
+        #     w_t = torch.exp(-self.vocab_size * self.gamma * (t_out - t_in))
+
+        wt = self.thermostat.w_ts(t_in, t_out)
         
         k_out, k_in = right_shape(k_out), right_shape(k_in)
         kronecker = (k_out == k_in).float()
