@@ -654,6 +654,7 @@ class JetFeatures:
 
         self._cluster = fastjet.ClusterSequence(self._constituents_ak, jetdef)
         self.d0 = self._calc_d0(R, beta)
+        self.c1 = self._cluster.exclusive_jets_energy_correlator(njets=1, func="c1")
         self.d2 = self._cluster.exclusive_jets_energy_correlator(njets=1, func="d2")
         self.tau1 = self._calc_tau1(beta)
         self.tau2 = self._calc_tau2(beta)

@@ -157,13 +157,3 @@ class DiscreteSolver:
             delta_p = new_delta_p  # Update reference probability
 
         return state_corrected, rates_corrected
-
-    def jensen_shannon_div(self, p, q, epsilon=1e-10):
-        """Compute Jensen-Shannon Divergence between two probability distributions."""
-        p = p + epsilon  # Prevent log(0) issues
-        q = q + epsilon
-        m = 0.5 * (p + q)
-        return 0.5 * (
-            F.kl_div(m.log(), p, reduction="batchmean")
-            + F.kl_div(m.log(), q, reduction="batchmean")
-        )

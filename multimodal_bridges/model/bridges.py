@@ -85,21 +85,23 @@ class TelegraphBridge:
     - k: discrete state at time t
     """
 
-    def __init__(self, gamma, vocab_size):
+    def __init__(self, gamma, vocab_size, beta_fn='constant'):
         self.gamma = gamma
         self.vocab_size = vocab_size
+        self.beta_fn = beta_fn
 
     def sample(self, t, batch: DataCoupling):
 
         k0 = batch.source.discrete
         k1 = batch.target.discrete
+
         transition_probs = self.transition_probability(t, k0, k1)
-        drwan_state = Categorical(transition_probs).sample().to(k1.device)
+        drawn_state = Categorical(transition_probs).sample().to(k1.device)
 
-        if drwan_state.dim() == 2:
-            drwan_state = drwan_state.unsqueeze(-1)
+        if drawn_state.dim() == 2:
+            drawn_state = drawn_state.unsqueeze(-1)
 
-        return drwan_state
+        return drawn_state
 
     def rate(self, state: TensorMultiModal, heads: TensorMultiModal):
         """t: (b, 1) time tensor
@@ -121,11 +123,13 @@ class TelegraphBridge:
 
         # ...Telegraph process rates:
 
-        S = self.vocab_size
         t, t1 = t.squeeze(), 1.0
-        wt = torch.exp(-S * self.gamma * (t1 - t))
+
+        if self.beta_fn == 'constant':
+            wt = torch.exp(-self.vocab_size * self.gamma * (t1 - t))
+
         A = 1.0
-        B = (wt * S) / (1.0 - wt)
+        B = (wt * self.vocab_size) / (1.0 - wt)
         C = wt
         rate = A + B[:, None, None] * qx + C[:, None, None] * qy
         return rate
@@ -168,13 +172,15 @@ class TelegraphBridge:
         \end{equation}
 
         """
-        S = self.vocab_size
         t_out = right_time_size(t_out, k_out).to(k_in.device)
         t_in = right_time_size(t_in, k_out).to(k_in.device)
-        w_t = torch.exp(-S * self.gamma * (t_out - t_in))
+        
+        if self.beta_fn == 'constant':
+            w_t = torch.exp(-self.vocab_size * self.gamma * (t_out - t_in))
+        
         k_out, k_in = right_shape(k_out), right_shape(k_in)
         kronecker = (k_out == k_in).float()
-        prob = 1.0 / S + w_t[:, None, None] * ((-1.0 / S) + kronecker)
+        prob = 1.0 / self.vocab_size + w_t[:, None, None] * ((-1.0 / self.vocab_size) + kronecker)
         return prob
 
 
