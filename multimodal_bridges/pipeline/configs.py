@@ -79,7 +79,7 @@ class ModelConfig:
     sigma: Optional[float] = None
     gamma: Optional[float] = None
     beta_fn: Optional[str] = None
-    loss_weights: Optional[str] = "fixed"
+    loss_weights: Optional[List[float]] = 'fixed'
     num_timesteps: int = None
     time_eps: float = 0.0
     save_path_history_snapshots: Optional[List[int]] = None
