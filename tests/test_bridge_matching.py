@@ -10,7 +10,7 @@ from model.multimodal_bridge_matching import MultiModalBridgeMatching
 log.warnings_off()
 
 RESOURCE_PATH = "/home/df630/Multimodal-Bridges/tests/resources"
-CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_model.yaml")
+CONFIG_PATH = os.path.join(RESOURCE_PATH, "config_multi-modal.yaml")
 
 @pytest.fixture
 def dummy_batch():

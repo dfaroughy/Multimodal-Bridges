@@ -36,6 +36,7 @@ model:
   loss_weights: 'learnable'
   sigma: 0.0001
   gamma: 0.125
+  thermostat_fn: ConstantThermostat
   num_timesteps: 10
   time_eps: 0.0001
 

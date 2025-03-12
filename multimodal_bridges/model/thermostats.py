@@ -49,4 +49,4 @@ class SigmoidThermostat(Thermostat):
     ''' beta(r) = 1/(1+r)
     '''
     def _integral(self, t0, t1):
-        return torch.tanh(t1/2) - np.tanh(t0/2)
+        return torch.tanh(t1/2) - torch.tanh(t0/2)

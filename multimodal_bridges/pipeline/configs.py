@@ -78,7 +78,7 @@ class ModelConfig:
     solver_discrete: Optional[str] = None
     sigma: Optional[float] = None
     gamma: Optional[float] = None
-    beta_fn: Optional[str] = None
+    thermostat_fn: Optional[str] = None
     loss_weights: Optional[List[float]] = 'fixed'
     num_timesteps: int = None
     time_eps: float = 0.0

@@ -2,7 +2,6 @@ import torch
 from torch.nn.functional import softmax
 from torch.distributions import Categorical
 
-from pipeline.registry import registered_thermostats as Thermostat
 from tensorclass import TensorMultiModal
 from datamodules.datasets import DataCoupling
 
@@ -86,10 +85,10 @@ class TelegraphBridge:
     - k: discrete state at time t
     """
 
-    def __init__(self, gamma, vocab_size, time_eps=0.0, thermostat_fn='ConstantThermostat':
+    def __init__(self, gamma, vocab_size, thermostat_fn, time_eps=0.0):
         self.gamma = gamma
         self.vocab_size = vocab_size
-        self.thermostat = Thermostat[thermostat_fn](vocab_size)
+        self.thermostat = thermostat_fn
         self.time_eps = time_eps
 
     def sample(self, t, batch: DataCoupling):
@@ -125,7 +124,7 @@ class TelegraphBridge:
 
         # ...Telegraph process rates:
 
-        t, t1 = t.squeeze(), 1.0 - self.time_eps
+        t, t1 = t.squeeze(), 1.0 
 
         # if self.beta_fn == 'constant':
             # wt = torch.exp(-self.vocab_size * self.gamma * (t1 - t))
@@ -159,9 +158,9 @@ class TelegraphBridge:
         k = k.to(k0.device)
 
         # ...compute probabilities:
-        p_k_to_k1 = self.conditional_probability(t, 1.0 - self.time_eps, k, k1)
-        p_k0_to_k = self.conditional_probability(self.time_eps, t, k0, k)
-        p_k0_to_k1 = self.conditional_probability(self.time_eps, 1.0 - self.time_eps, k0, k1)
+        p_k_to_k1 = self.conditional_probability(t, 1.0, k, k1)
+        p_k0_to_k = self.conditional_probability(0.0, t, k0, k)
+        p_k0_to_k1 = self.conditional_probability(0.0, 1.0, k0, k1)
 
         return (p_k_to_k1 * p_k0_to_k) / p_k0_to_k1
 
@@ -186,7 +185,7 @@ class TelegraphBridge:
         
         k_out, k_in = right_shape(k_out), right_shape(k_in)
         kronecker = (k_out == k_in).float()
-        prob = 1.0 / self.vocab_size + w_t[:, None, None] * ((-1.0 / self.vocab_size) + kronecker)
+        prob = 1.0 / self.vocab_size + wt[:, None, None] * ((-1.0 / self.vocab_size) + kronecker)
         return prob
 
 

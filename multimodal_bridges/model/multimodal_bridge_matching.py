@@ -9,11 +9,13 @@ from pipeline.registry import registered_models as Encoder
 from pipeline.registry import registered_bridges as Bridge
 from pipeline.registry import registered_optimizers as Optimizer
 from pipeline.registry import registered_schedulers as Scheduler
+from pipeline.registry import registered_thermostats as Thermostat
 
 from tensorclass import TensorMultiModal
 from datamodules.datasets import DataCoupling
 from encoders.embedder import MultiModalEmbedder
 from model.solvers import ContinuousSolver, DiscreteSolver
+
 
 class MultiModalBridgeMatching(L.LightningModule):
     """Bridge-Matching model for multi-modal data"""
@@ -25,24 +27,27 @@ class MultiModalBridgeMatching(L.LightningModule):
         self.encoder = Encoder[config.encoder.name](config)
 
         if config.data.modality in ["continuous", "multi-modal"]:
-            self.bridge_continuous = Bridge[config.model.bridge_continuous](sigma=config.model.sigma)
+            self.bridge_continuous = Bridge[config.model.bridge_continuous](
+                sigma=config.model.sigma
+            )
             self.loss_continuous_fn = nn.MSELoss(reduction="none")
 
         if config.data.modality in ["discrete", "multi-modal"]:
-            gamma = config.model.gamma
             self.vocab_size = config.data.vocab_size
 
             self.bridge_discrete = Bridge[config.model.bridge_discrete](
-                gamma=config.model.gamma, 
-                vocab_size=self.vocab_size, 
-                time_eps=self.config.model.time_eps, 
-                thermostat_fn=config.model.thermostat
+                gamma=config.model.gamma,
+                vocab_size=self.vocab_size,
+                time_eps=self.config.model.time_eps,
+                thermostat_fn=Thermostat[config.model.thermostat_fn](
+                    config.model.gamma, self.vocab_size
+                ),
             )
 
             freqs = (
                 torch.tensor(config.data.vocab_freq) if config.data.vocab_freq else None
             )
-            
+
             self.loss_discrete_fn = nn.CrossEntropyLoss(weight=freqs, reduction="none")
 
         self.loss_multimode = MultiModeLoss(weights=config.model.loss_weights)
@@ -234,7 +239,7 @@ class MultiModalBridgeMatching(L.LightningModule):
             state.time = torch.full((len(batch), 1), t.item(), device=self.device)
             state = solver_continuous.fwd_step(state, batch, delta_t)
             state, rates = solver_discrete.fwd_step(state, batch, delta_t)
-            state.broadcast_time() # (B,1) -> (B,D,1)
+            state.broadcast_time()  # (B,1) -> (B,D,1)
 
             if isinstance(self.path_snapshots_idx, list):
                 for i in self.path_history_idx:
@@ -265,7 +270,7 @@ class MultiModeLoss(nn.Module):
     def __init__(self, weights=None):
         super().__init__()
 
-        weights = [1.0, 1.0] if weights=='fixed' else weights
+        weights = [1.0, 1.0] if weights == "fixed" else weights
 
         if weights == "learnable":
             self.learnable = True
