@@ -1,6 +1,8 @@
 import json
 import os
 import warnings
+from pathlib import Path
+import torch.distributed as dist
 
 
 def get_from_json(key, path, name="metadata.json"):
@@ -28,3 +30,34 @@ class SimpleLogger:
         warnings.filterwarnings("ignore", category=UserWarning)
         warnings.filterwarnings("ignore", category=DeprecationWarning)
         warnings.filterwarnings("ignore", category=FutureWarning)
+
+
+def get_unique_dir(base_dir, exist_ok=False):
+    """Returns a unique directory path by appending an integer suffix if needed."""
+    if os.path.exists(base_dir) and not exist_ok:
+        counter = 1
+        new_dir = f"{base_dir}_{counter}"
+        while os.path.exists(new_dir):
+            counter += 1
+            new_dir = f"{base_dir}_{counter}"
+        return new_dir
+    return base_dir
+
+
+def setup_logging_dir(base_dir, exist_ok=False):
+    """
+    In a distributed setting, only the rank 0 process creates the directory.
+    The unique directory path is then broadcasted to all processes.
+    """
+    unique_dir = None
+
+    if not dist.is_available() or not dist.is_initialized() or dist.get_rank() == 0:
+        unique_dir = get_unique_dir(base_dir, exist_ok=exist_ok)
+        os.makedirs(unique_dir, exist_ok=True)
+
+    if dist.is_available() and dist.is_initialized():
+        unique_dir_list = [unique_dir if unique_dir is not None else ""]
+        dist.broadcast_object_list(unique_dir_list, src=0)
+        unique_dir = unique_dir_list[0]
+
+    return Path(unique_dir)
