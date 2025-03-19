@@ -29,6 +29,7 @@ class JetGeneratorCallback(Callback):
         self.data_dir = makedir(Path(self.config.path) / "data", exist_ok=False)
         self.metric_dir = makedir(Path(self.config.path) / "metrics", exist_ok=False)
         self.plots_dir = makedir(Path(self.config.path) / "plots", exist_ok=False)
+        self.config.save(self.data_dir, name="gen_config.yaml")
 
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
