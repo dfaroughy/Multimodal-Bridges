@@ -85,11 +85,10 @@ class TelegraphBridge:
     - k: discrete state at time t
     """
 
-    def __init__(self, gamma, vocab_size, thermostat_fn, time_eps=0.0):
+    def __init__(self, gamma, vocab_size, thermostat_fn):
         self.gamma = gamma
         self.vocab_size = vocab_size
         self.thermostat = thermostat_fn
-        self.time_eps = time_eps
 
     def sample(self, t, batch: DataCoupling):
 
@@ -124,13 +123,8 @@ class TelegraphBridge:
 
         # ...Telegraph process rates:
 
-        t, t1 = t.squeeze(), 1.0 
-
-        # if self.beta_fn == 'constant':
-            # wt = torch.exp(-self.vocab_size * self.gamma * (t1 - t))
-        
-        wt = self.thermostat.w_ts(t, t1)
-
+        t = t.squeeze()
+        wt = self.thermostat.w_ts(t, 1.0)
         A = 1.0
         B = (wt * self.vocab_size) / (1.0 - wt)
         C = wt
@@ -145,19 +139,20 @@ class TelegraphBridge:
         """
         # ...reshape input tenors:
         t = t.clone().squeeze()  # shape: (B)
+
         if k0.dim() == 1:
-            k0 = k0.unsqueeze(1)  # Add an extra dimension if needed
+            k0 = k0.unsqueeze(1)  
+
         if k1.dim() == 1:
             k1 = k1.unsqueeze(1)
 
         # ...set state configurations:
-        k = torch.arange(0, self.vocab_size)  # shape: (vocab_size,)
-        k = (
-            k[None, None, :].repeat(k0.size(0), k0.size(1), 1).float()
-        )  # shape: (B, N, vocab_size)
+        k = torch.arange(0, self.vocab_size)  # (V,)
+        k = k[None, None, :].repeat(k0.size(0), k0.size(1), 1).float()  # (B, N, V)
         k = k.to(k0.device)
 
         # ...compute probabilities:
+
         p_k_to_k1 = self.conditional_probability(t, 1.0, k, k1)
         p_k0_to_k = self.conditional_probability(0.0, t, k0, k)
         p_k0_to_k1 = self.conditional_probability(0.0, 1.0, k0, k1)
@@ -175,14 +170,12 @@ class TelegraphBridge:
         \end{equation}
 
         """
+
         t_out = right_time_size(t_out, k_out).to(k_in.device)
         t_in = right_time_size(t_in, k_out).to(k_in.device)
-        
-        # if self.beta_fn == 'constant':
-        #     w_t = torch.exp(-self.vocab_size * self.gamma * (t_out - t_in))
 
         wt = self.thermostat.w_ts(t_in, t_out)
-        
+
         k_out, k_in = right_shape(k_out), right_shape(k_in)
         kronecker = (k_out == k_in).float()
         prob = 1.0 / self.vocab_size + wt[:, None, None] * ((-1.0 / self.vocab_size) + kronecker)

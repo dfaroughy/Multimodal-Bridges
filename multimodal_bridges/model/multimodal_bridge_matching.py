@@ -4,6 +4,7 @@ import lightning as L
 from typing import List, Tuple, Dict, Union
 
 from pipeline.configs import ExperimentConfigs
+
 from pipeline.registry import registered_distributions as Distribution
 from pipeline.registry import registered_models as Encoder
 from pipeline.registry import registered_bridges as Bridge
@@ -22,26 +23,31 @@ class MultiModalBridgeMatching(L.LightningModule):
 
     def __init__(self, config: ExperimentConfigs):
         super().__init__()
+
         self.config = config
         self.embedder = MultiModalEmbedder(config)
         self.encoder = Encoder[config.encoder.name](config)
 
         if config.data.modality in ["continuous", "multi-modal"]:
+            
             self.bridge_continuous = Bridge[config.model.bridge_continuous](
                 sigma=config.model.sigma
             )
+            
             self.loss_continuous_fn = nn.MSELoss(reduction="none")
 
         if config.data.modality in ["discrete", "multi-modal"]:
+            
             self.vocab_size = config.data.vocab_size
+
+            thermostat = Thermostat[config.model.thermostat_fn](
+                    config.model.gamma, self.vocab_size
+                )
 
             self.bridge_discrete = Bridge[config.model.bridge_discrete](
                 gamma=config.model.gamma,
                 vocab_size=self.vocab_size,
-                time_eps=self.config.model.time_eps,
-                thermostat_fn=Thermostat[config.model.thermostat_fn](
-                    config.model.gamma, self.vocab_size
-                ),
+                thermostat_fn=thermostat,
             )
 
             freqs = (
@@ -61,14 +67,15 @@ class MultiModalBridgeMatching(L.LightningModule):
 
         if not config.data.target_path:
             self.sample_target = Distribution[config.data.target_name](config)
+            
+    # ...Lightning functions
 
     def forward(self, state: TensorMultiModal, batch: DataCoupling) -> TensorMultiModal:
         h_local, h_global = self.embedder(state, batch)
         return self.encoder(h_local, h_global)
 
-    # ...Lightning functions
-
     def training_step(self, batch: DataCoupling, batch_idx) -> Dict[str, torch.Tensor]:
+        
         state = self.sample_bridges(batch)
         state = state.to(self.device)
 
@@ -86,9 +93,8 @@ class MultiModalBridgeMatching(L.LightningModule):
             "train_weights_discrete": weights[1],
         }
 
-    def validation_step(
-        self, batch: DataCoupling, batch_idx
-    ) -> Dict[str, torch.Tensor]:
+    def validation_step(self, batch: DataCoupling, batch_idx) -> Dict[str, torch.Tensor]:
+        
         state = self.sample_bridges(batch)
         state = state.to(self.device)
 
@@ -159,6 +165,7 @@ class MultiModalBridgeMatching(L.LightningModule):
     def loss_fn(
         self, heads: TensorMultiModal, state: TensorMultiModal, batch: DataCoupling
     ) -> torch.Tensor:
+
         loss_continuous = torch.tensor(0.0, device=self.device)
         loss_discrete = torch.tensor(0.0, device=self.device)
 
@@ -168,8 +175,8 @@ class MultiModalBridgeMatching(L.LightningModule):
 
             vector = heads.continuous
             targets = self.bridge_continuous.drift(state, batch).to(self.device)
-
-            loss_mse = self.loss_continuous_fn(vector, targets) * state.mask
+            loss_mse = self.loss_continuous_fn(vector, targets) 
+            loss_mse *= state.mask
             loss_continuous = loss_mse.sum() / state.mask.sum()
 
         if heads.has_discrete:
@@ -178,10 +185,8 @@ class MultiModalBridgeMatching(L.LightningModule):
 
             logits = heads.discrete.transpose(1, 2)
             targets = batch.target.discrete.squeeze(-1).to(self.device)
-
-            loss_ce = (
-                self.loss_discrete_fn(logits, targets.long()).unsqueeze(-1) * state.mask
-            )
+            loss_ce = self.loss_discrete_fn(logits, targets.long()).unsqueeze(-1)
+            loss_ce *= state.mask
             loss_discrete = loss_ce.sum() / state.mask.sum()
 
         return loss_continuous, loss_discrete

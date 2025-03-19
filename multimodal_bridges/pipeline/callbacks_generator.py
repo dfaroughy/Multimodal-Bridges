@@ -7,7 +7,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from lightning.pytorch.callbacks import Callback
-from lightning.pytorch.utilities import rank_zero_only
+from lightning.pytorch.utilities import rank_zero_only, increment_path
 
 from pipeline.configs import ExperimentConfigs
 from pipeline.helpers import SimpleLogger as log
@@ -25,12 +25,26 @@ class JetGeneratorCallback(Callback):
         self.batched_target_states = []
 
     def on_predict_start(self, trainer, pl_module):
-        self.data_dir = Path(self.config.path) / "data"
-        self.metric_dir = os.path.join(self.config.path, "metrics")
-        self.plots_dir = Path(self.config.path) / "plots"
-        os.makedirs(self.data_dir, exist_ok=True)
-        os.makedirs(self.metric_dir, exist_ok=True)
-        os.makedirs(self.plots_dir, exist_ok=True)
+        # self.data_dir = Path(self.config.path) / "data"
+        # self.metric_dir = os.path.join(self.config.path, "metrics")
+        # self.plots_dir = Path(self.config.path) / "plots"
+        # os.makedirs(self.data_dir, exist_ok=True)
+        # os.makedirs(self.metric_dir, exist_ok=True)
+        # os.makedirs(self.plots_dir, exist_ok=True)
+
+        self.data_dir = increment_path(
+            os.path.join(self.config.path, "data"), exist_ok=False
+        )
+        self.metric_dir = increment_path(
+            os.path.join(self.config.path, "metrics"), exist_ok=False
+        )
+        self.plots_dir = increment_path(
+            os.path.join(self.config.path, "plots"), exist_ok=False
+        )
+
+        os.makedirs(self.data_dir)
+        os.makedirs(self.metric_dir)
+        os.makedirs(self.plots_dir)
 
     def on_predict_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if outputs is not None:
