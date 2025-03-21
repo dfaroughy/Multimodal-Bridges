@@ -132,13 +132,13 @@ class MultiModalEPiC(nn.Module):
 
         self.continuous_head = nn.Sequential(
             wn(nn.Linear(dim_time + dim_head_cont + dim_head_disc, dim_head_cont)),
-            activation_fn,
+            nn.GELU(),
             wn(nn.Linear(dim_head_cont, dim_out_continuous)),
         )
 
         self.discrete_head = nn.Sequential(
             wn(nn.Linear(dim_time + dim_head_disc + dim_head_cont, dim_head_disc)),
-            activation_fn,
+            nn.GELU(),
             wn(nn.Linear(dim_head_disc, dim_out_discrete)),
         )
         
