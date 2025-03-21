@@ -127,21 +127,12 @@ class MultiModalEPiC(nn.Module):
 
         # ...mode heads:
 
-        dim_head_cont = dim_hid_loc[2] // 2
-        dim_head_disc = dim_hid_loc[2] // 2
+        dim_head_cont = dim_hid_loc[0] if not self.mode_fusion else dim_hid_loc[2] // 2
+        dim_head_disc = dim_hid_loc[1] if not self.mode_fusion else dim_hid_loc[2] // 2
 
-        self.continuous_head = nn.Sequential(
-            wn(nn.Linear(dim_time + dim_head_cont + dim_head_disc, dim_head_cont)),
-            activation_fn,
-            wn(nn.Linear(dim_head_cont, dim_out_continuous)),
-        )
+        self.continuous_head = wn(nn.Linear(dim_time + dim_head_cont, dim_out_continuous))
+        self.discrete_head = wn(nn.Linear(dim_time + dim_head_disc, dim_out_discrete))
 
-        self.discrete_head = nn.Sequential(
-            wn(nn.Linear(dim_time + dim_head_disc + dim_head_cont, dim_head_disc)),
-            activation_fn,
-            wn(nn.Linear(dim_head_disc, dim_out_discrete)),
-        )
-        
         self.dim_hid_loc_cont = dim_hid_loc[0]
 
     def forward(
@@ -159,12 +150,13 @@ class MultiModalEPiC(nn.Module):
 
         # ...fusion
 
-        f = torch.cat([h1, h2], dim=-1)
-        fused = self.fused_body(state_local.time, f, global_cat, mask)
-        f1, f2 = torch.tensor_split(fused, 2, dim=-1)
-        
-        h_continuous = self.continuous_head(torch.cat([state_local.time, f1, h1 + h2], dim=-1))
-        h_discrete = self.discrete_head(torch.cat([state_local.time, f2, h1 + h2], dim=-1))
+        if self.mode_fusion:
+            f = torch.cat([h1, h2], dim=-1)
+            h = self.fused_body(state_local.time, f, global_cat, mask)
+            h1, h2 = torch.tensor_split(h, 2, dim=-1)
+
+        h_continuous = self.continuous_head(torch.cat([state_local.time, h1], dim=-1))
+        h_discrete = self.discrete_head(torch.cat([state_local.time, h2], dim=-1))
 
         return TensorMultiModal(None, h_continuous, h_discrete, mask)
 
