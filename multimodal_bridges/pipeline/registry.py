@@ -3,7 +3,7 @@ from datamodules.aoj import AspenOpenJets
 from distributions.noise import Noise, SourceUniform, SourceDegenerate, SourceMasked, SourceDataDriven
 from model.bridges import UniformFlow, SchrodingerBridge, TelegraphBridge
 from model.thermostats import ConstantThermostat, InverseThermostat, LinearThermostat, InverseSquareThermostat, SigmoidThermostat
-from encoders.multimodal_epic import UniModalEPiC, MultiModalEPiC, MultiModalFusedEPiC
+from encoders.multimodal_epic import UniModalEPiC, MultiModalEPiC
 
 registered_datasets = {
     "AspenOpenJets": AspenOpenJets,
@@ -26,7 +26,6 @@ registered_bridges = {
 registered_models = {
     "UniModalEPiC": UniModalEPiC,
     "MultiModalEPiC": MultiModalEPiC,
-    "MultiModalFusedEPiC": MultiModalFusedEPiC,
 }
 
 registered_thermostats = {
