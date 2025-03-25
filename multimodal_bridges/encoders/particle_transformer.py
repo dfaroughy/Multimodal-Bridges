@@ -17,12 +17,15 @@ class TransformerEncoderBlock(nn.Module):
         dropout: Dropout rate.
         """
         super().__init__()
+
+
         self.input_proj = nn.Linear(d_input, d_model)
-        # Project time embedding into transformer space if needed.
+
         if d_time != d_model:
             self.time_proj = nn.Linear(d_time, d_model)
         else:
             self.time_proj = nn.Identity()
+            
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=n_heads,
@@ -32,10 +35,7 @@ class TransformerEncoderBlock(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
 
-
-
-
-    def forward(self, x, t_emb, mask):
+    def forward(self, t_emb, x, mask):
         """
         Args:
             x: Tensor of shape (B, N, d_input) containing particle features.
@@ -44,26 +44,10 @@ class TransformerEncoderBlock(nn.Module):
         Returns:
             Tensor of shape (B, N, d_model).
         """
-        h = self.input_proj(x)  # (B, N, d_model)
-
-        print('>>>>>>>', h.size(), t_emb.size(), mask.size())
-        # Check dimension of time embedding.
-        if t_emb.shape != 2:
-            # t_emb shape: (B, d_time) -> project then unsqueeze to (B, 1, d_model)
-            t_emb_proj = self.time_proj(t_emb)  # (B, d_model)
-            t_emb_proj = t_emb_proj.unsqueeze(1)  # (B, 1, d_model)
-        elif t_emb.dim() == 3:
-            # Expecting t_emb to be (B, 1, d_time)
-            if t_emb.size(1) != 1:
-                raise ValueError("If time embedding is 3D, its second dimension must be 1.")
-            t_emb_proj = self.time_proj(t_emb.squeeze(1)).unsqueeze(1)  # (B, 1, d_model)
-        else:
-            raise ValueError("Time embedding t_emb should be 2D or 3D.")
-        # Add projected time embedding to each particle token.
-
-        pad_mask = (mask == 0)  # True for padded tokens.
-        h = self.transformer(h, src_key_padding_mask=pad_mask)
-        return h
+        h = self.input_proj(x.float())
+        t_emb_proj = self.time_proj(t_emb) 
+        h += t_emb_proj
+        return self.transformer(h, src_key_padding_mask=mask.squeeze(-1) > 0)
 
 class MultiModalParticleTransformer(nn.Module):
     def __init__(self, config):
@@ -80,17 +64,21 @@ class MultiModalParticleTransformer(nn.Module):
         # Hidden dimensions for each branch 
         self.dim_hid_cont = config.encoder.dim_hidden_local[0]
         self.dim_hid_disc = config.encoder.dim_hidden_local[1]
+
         num_blocks = config.encoder.num_blocks  # e.g. (num_blocks_cont, num_blocks_disc, num_blocks_fusion)
+
         self.num_blocks_cont = num_blocks[0]
         self.num_blocks_disc = num_blocks[1]
         self.num_blocks_fusion = num_blocks[2]
 
         # Transformer hyperparameters 
+
         self.n_heads = config.encoder.num_heads
         self.dim_feedforward = 4 * self.dim_hid_cont
         self.dropout = config.encoder.dropout
 
         # Create transformer encoders for each modality.
+
         self.continuous_encoder = TransformerEncoderBlock(
             d_input=self.dim_cont_in,
             d_model=self.dim_hid_cont,
@@ -100,6 +88,7 @@ class MultiModalParticleTransformer(nn.Module):
             dim_feedforward=self.dim_feedforward,
             dropout=self.dropout,
         )
+
         self.discrete_encoder = TransformerEncoderBlock(
             d_input=self.dim_disc_in,
             d_model=self.dim_hid_disc,
@@ -111,7 +100,9 @@ class MultiModalParticleTransformer(nn.Module):
         )
 
         # Fusion stage if enabled (when num_blocks_fusion > 0)
+
         self.mode_fusion = self.num_blocks_fusion > 0
+
         if self.mode_fusion:
             fusion_input_dim = self.dim_hid_cont + self.dim_hid_disc
             self.dim_hid_fusion = config.encoder.dim_hidden_local[2]
@@ -154,35 +145,20 @@ class MultiModalParticleTransformer(nn.Module):
             TensorMultiModal with updated continuous and discrete outputs.
         """
         mask = state_local.mask
-        t = state_local.time  # expected shape: (B, d_time) or (B, 1, d_time)
-        # If t is 1D or 2D, ensure it becomes 2D (B, d_time)
-        if t.dim() == 1:
-            t = t.unsqueeze(-1)
-
-        # Process continuous branch.
-        cont_in = state_local.continuous  # shape: (B, N, dim_cont_in)
-        h1 = self.continuous_encoder(cont_in, t, mask)  # (B, N, dim_hid_cont)
-
-        # Process discrete branch.
-        disc_in = state_local.discrete  # shape: (B, N, dim_disc_in)
-        h2 = self.discrete_encoder(disc_in, t, mask)  # (B, N, dim_hid_disc)
+        t = state_local.time  
+        h1 = self.continuous_encoder(t, state_local.continuous, mask)  
+        h2 = self.discrete_encoder(t, state_local.discrete, mask) 
 
         if self.mode_fusion:
             # Fuse features from both modalities.
             h_cat = torch.cat([h1, h2], dim=-1)  # (B, N, dim_hid_cont + dim_hid_disc)
-            fused = self.fused_encoder(h_cat, t, mask)  # (B, N, dim_hid_fusion)
-            # Split fusion output into two halves.
+            fused = self.fused_encoder(t, h_cat, mask)  # (B, N, dim_hid_fusion)
             f1, f2 = torch.chunk(fused, 2, dim=-1)
-            # Expand time to each token.
-            t_exp = t.unsqueeze(1).expand(-1, h1.size(1), -1)
-            # For continuous head: input = [t, h1, f1]
-            head_cont_input = torch.cat([t_exp, h1, f1], dim=-1)
-            # For discrete head: input = [t, h2, f2]
-            head_disc_input = torch.cat([t_exp, h2, f2], dim=-1)
+            head_cont_input = torch.cat([t, h1, f1], dim=-1)
+            head_disc_input = torch.cat([t, h2, f2], dim=-1)
         else:
-            t_exp = t.unsqueeze(1).expand(-1, h1.size(1), -1)
-            head_cont_input = torch.cat([t_exp, h1], dim=-1)
-            head_disc_input = torch.cat([t_exp, h2], dim=-1)
+            head_cont_input = torch.cat([t, h1], dim=-1)
+            head_disc_input = torch.cat([t, h2], dim=-1)
 
         # Compute outputs via modality-specific heads.
         out_cont = self.continuous_head(head_cont_input)  # (B, N, dim_out_cont)

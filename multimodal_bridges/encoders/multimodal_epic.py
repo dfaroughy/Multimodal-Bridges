@@ -31,12 +31,12 @@ class UniModalEPiC(nn.Module):
 
         self.epic = EPiCEncoder(
             dim_time=config.encoder.dim_emb_time,
-            dim_input=dim_input,
-            dim_output=dim_output,
-            dim_context=dim_context,
-            num_blocks=config.encoder.num_blocks,
+            dim_input_loc=dim_input,
+            dim_input_glob=dim_context,
+            dim_output_loc=dim_output,
             dim_hid_loc=config.encoder.dim_hidden_local,
             dim_hid_glob=config.encoder.dim_hidden_glob,
+            num_blocks=config.encoder.num_blocks,
             use_skip_connection=config.encoder.skip_connection,
             dropout=config.encoder.dropout,
         )
@@ -150,9 +150,11 @@ class MultiModalEPiC(nn.Module):
     def forward(
         self, state_local: TensorMultiModal, state_global: TensorMultiModal
     ) -> TensorMultiModal:
+
         global_modes = [
             getattr(state_global, mode) for mode in state_global.available_modes()
         ]
+        
         global_cat = torch.cat(global_modes, dim=-1)
         mask = state_local.mask
         t = state_local.time
