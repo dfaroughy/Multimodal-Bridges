@@ -1,12 +1,11 @@
 import torch
+import numpy as np
 import math
 from torch import nn
 from typing import Tuple
 import torch.nn.utils.weight_norm as wn
-import torch.nn.functional as F
 
 from tensorclass import TensorMultiModal
-from pipeline.helpers import SimpleLogger as log
 
 
 class MultiModalEmbedder(nn.Module):
@@ -38,7 +37,13 @@ class MultiModalEmbedder(nn.Module):
         dim_emb_k = config.encoder.dim_emb_discrete
 
         # Time embeddings
-        self.time_embedding = SinusoidalPositionalEncoding(dim_emb_t, max_period=10000)
+
+        # self.time_embedding = SinusoidalPositionalEncoding(dim_emb_t, max_period=10000)
+        
+        self.time_embedding = nn.Sequential(
+            GaussianFourierProjection(embed_dim=dim_emb_t),
+            nn.Linear(dim_emb_t, dim_emb_t),
+        )
 
         # Continuous embeddings
         if config.data.modality in ["continuous", "multi-modal"]:
@@ -51,10 +56,10 @@ class MultiModalEmbedder(nn.Module):
     def forward(
         self, state: TensorMultiModal, batch: TensorMultiModal
     ) -> Tuple[TensorMultiModal, TensorMultiModal]:
-
         continuous_feats, discrete_feats = None, None
 
         t_emb = self.time_embedding(state.time.squeeze(-1))
+        # t_emb = self.time_embedding(state.time)
         time_context = t_emb.clone().to(t_emb.device)  # (B, dim_time_emb)
         time = t_emb.unsqueeze(1).repeat(1, state.shape[-1], 1)  # (B, N, dim_time_emb)
 
@@ -70,6 +75,19 @@ class MultiModalEmbedder(nn.Module):
 
         return state_loc, state_glob
 
+
+class GaussianFourierProjection(nn.Module):
+    """
+    Gaussian random features for encoding time steps.
+    """
+
+    def __init__(self, embed_dim, scale=1.0):
+        super().__init__()
+        self.W = nn.Parameter(torch.randn(embed_dim // 2) * scale, requires_grad=False)
+
+    def forward(self, x):
+        x_proj = x[:, None] * self.W[None, :] * 2 * np.pi
+        return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1).squeeze()
 
 
 class SinusoidalPositionalEncoding(nn.Module):
