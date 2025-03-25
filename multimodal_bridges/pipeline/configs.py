@@ -49,8 +49,9 @@ class EncoderConfig:
     name: str
     num_blocks: Optional[int]
     dim_hidden_local: Optional[int]
-    dim_hidden_glob: Optional[int]
-    skip_connection: Optional[bool]
+    num_heads: Optional[int] = None # for transformer
+    dim_hidden_glob: Optional[int] = None
+    skip_connection: Optional[bool] = True
     dropout: Optional[float] = 0.0
     data_augmentation: Optional[bool] = False
     dim_emb_time: Optional[int] = 0

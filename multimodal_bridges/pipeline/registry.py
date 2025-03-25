@@ -4,6 +4,7 @@ from distributions.noise import Noise, SourceUniform, SourceDegenerate, SourceMa
 from model.bridges import UniformFlow, SchrodingerBridge, TelegraphBridge
 from model.thermostats import ConstantThermostat, InverseThermostat, LinearThermostat, InverseSquareThermostat, SigmoidThermostat
 from encoders.multimodal_epic import UniModalEPiC, MultiModalEPiC
+from encoders.particle_transformer import MultiModalParticleTransformer
 
 registered_datasets = {
     "AspenOpenJets": AspenOpenJets,
@@ -26,6 +27,8 @@ registered_bridges = {
 registered_models = {
     "UniModalEPiC": UniModalEPiC,
     "MultiModalEPiC": MultiModalEPiC,
+    "MultiModalParticleTransformer": MultiModalParticleTransformer,
+
 }
 
 registered_thermostats = {
