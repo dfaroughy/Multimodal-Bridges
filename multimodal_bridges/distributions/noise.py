@@ -112,6 +112,103 @@ class SourceUniform:
         return metadata
 
 
+class SourceDirichlet:
+    def __init__(self, config):
+        self.config = config
+
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+        num_jets, max_num_particles = shape
+
+        if sample_masks:
+            probs = self.metadata["categorical_probs"]
+            cat = Categorical(torch.tensor(probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+                idx = torch.randperm(max_num_particles)
+                mask[i] = mask[i][idx]
+
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        if self.config.data.modality == "continuous":
+            discrete = None
+            continuous = torch.distributions.dirichlet.Dirichlet(torch.ones(self.vocab_size)).sample((num_jets, max_num_particles))
+        else:
+            raise ValueError("Dirichlet source only supports continuous features")
+
+        sample = TensorMultiModal(None, continuous, discrete, mask)
+
+        return sample.to(device)
+
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        return metadata
+
+
+
+class SourceUniform:
+    def __init__(self, config):
+        self.config = config
+
+        self.vocab_size = self.config.data.vocab_size
+        self.dim_continuous = self.config.data.dim_continuous
+        self.metadata = self._load_metadata(self.config.data.target_path)
+
+    def __call__(self, shape, device, sample_masks=False) -> TensorMultiModal:
+        num_jets, max_num_particles = shape
+
+        if sample_masks:
+            probs = self.metadata["categorical_probs"]
+            cat = Categorical(torch.tensor(probs))
+            multiplicity = cat.sample((num_jets,))
+            mask = torch.zeros((num_jets, max_num_particles))
+
+            for i, n in enumerate(multiplicity):
+                mask[i, :n] = 1
+                idx = torch.randperm(max_num_particles)
+                mask[i] = mask[i][idx]
+
+            mask = mask.long().unsqueeze(-1)
+        else:
+            mask = torch.ones((num_jets, max_num_particles, 1)).long()
+
+        if self.config.data.modality == "discrete":
+            continuous = None
+            discrete = torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
+
+        elif self.config.data.modality == "continuous":
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = None
+        else:
+            continuous = torch.randn((num_jets, max_num_particles, self.dim_continuous))
+            discrete = torch.randint(0, self.vocab_size, (num_jets, max_num_particles, 1))
+
+        sample = TensorMultiModal(None, continuous, discrete, mask)
+
+        return sample.to(device)
+
+    def _load_metadata(self, path):
+        metadata_file = os.path.join(path, "metadata.json")
+        with open(metadata_file, "r") as f:
+            metadata = json.load(f)
+        return metadata
+
+
+
+
+
+
+
 class SourceDegenerate:
     def __init__(self, config):
         self.config = config
