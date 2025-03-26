@@ -1,6 +1,6 @@
 import torch
 from datamodules.aoj import AspenOpenJets
-from distributions.noise import Noise, SourceUniform, SourceDegenerate, SourceMasked, SourceDataDriven, SourceDirichlet
+from distributions.noise import Noise, SourceUniform, SourceDegenerate, SourceMasked, SourceDataDriven, SourceDirichlet, SourceRandomOneHot
 from model.bridges import UniformFlow, SchrodingerBridge, TelegraphBridge
 from model.thermostats import ConstantThermostat, InverseThermostat, LinearThermostat, InverseSquareThermostat, SigmoidThermostat
 from encoders.multimodal_epic import UniModalEPiC, MultiModalEPiC
@@ -17,6 +17,7 @@ registered_distributions = {
     "SourceMasked": SourceMasked,
     "SourceDataDriven": SourceDataDriven,
     "SourceDirichlet": SourceDirichlet,
+    "SourceRandomOneHot":SourceRandomOneHot,
 }
 
 registered_bridges = {
