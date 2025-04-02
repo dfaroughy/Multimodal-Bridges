@@ -32,6 +32,7 @@ class ExperimentPipeline:
         num_nodes: int = 1,
         sync_batchnorm: bool = False,
         tags: Union[str, List[str]] = None,
+        config_update: dict = None
     ):
         """
         Initialize the pipeline with configurations and components.
@@ -56,7 +57,7 @@ class ExperimentPipeline:
         self.num_nodes = num_nodes
         self.sync_batchnorm = sync_batchnorm
         self.ckpt_path = None
-        self.config_update = None
+        self.config_update = config_update
         self.tags = tags
 
         if not experiment_path and config:
