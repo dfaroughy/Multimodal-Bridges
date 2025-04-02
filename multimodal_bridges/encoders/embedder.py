@@ -38,10 +38,17 @@ class MultiModalEmbedder(nn.Module):
 
         # Time embeddings
 
-        # self.time_embedding = SinusoidalPositionalEncoding(dim_emb_t, max_period=10000)
+        # if config.encoder.time_embedding == 'SinusoidalPositionalEncoding':
+        #     self.time_embedding = SinusoidalPositionalEncoding(dim_emb_t, max_period=10000)
         
+        # elif config.encoder.time_embedding == 'GaussianFourierProjection':
+        #     self.time_embedding = nn.Sequential(
+        #         GaussianFourierProjection(embed_dim=dim_emb_t, scale=2.0),
+        #         nn.Linear(dim_emb_t, dim_emb_t),
+        #     )
+
         self.time_embedding = nn.Sequential(
-            GaussianFourierProjection(embed_dim=dim_emb_t),
+            GaussianFourierProjection(embed_dim=dim_emb_t, scale=30.0),
             nn.Linear(dim_emb_t, dim_emb_t),
         )
 
