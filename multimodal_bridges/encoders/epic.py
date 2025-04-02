@@ -40,6 +40,7 @@ class EPiCEncoder(nn.Module):
         else:
             self.epic_layers.append(
             EPiCLayer(
+                dim_time=dim_time,
                 dim_loc=dim_input_loc,
                 dim_glob=dim_input_glob,
                 dim_hid_loc=dim_hid_loc,
@@ -53,6 +54,7 @@ class EPiCEncoder(nn.Module):
         for _ in range(self.num_blocks):
             self.epic_layers.append(
                 EPiCLayer(
+                    dim_time=dim_time,
                     dim_loc=dim_hid_loc,
                     dim_glob=dim_hid_glob,
                     dim_hid_loc=dim_hid_loc,
@@ -78,7 +80,7 @@ class EPiCEncoder(nn.Module):
 
         # ...EPiC layers:
         for i in range(self.num_blocks):
-            x_local, x_global = self.epic_layers[i](x_local, x_global, mask)
+            x_local, x_global = self.epic_layers[i](time_local, x_local, x_global, mask)
             x_local += x_local_skip
             x_global += x_global_skip
 
@@ -152,9 +154,10 @@ class EPiCProjection(nn.Module):
 
 
 class EPiCLayer(nn.Module):
-    # based on https://github.com/uhh-pd-ml/EPiC-GAN/blob/main/models.py
+    # Temporal layer based on https://github.com/uhh-pd-ml/EPiC-GAN/blob/main/models.py
     def __init__(
         self,
+        dim_time: int,
         dim_loc: int,
         dim_glob: int,
         dim_hid_glob: int,
@@ -168,14 +171,14 @@ class EPiCLayer(nn.Module):
         self.pooling_fn = pooling_fn
         self.act_fn = activation_fn
 
-        self.fc_glob1 = wn(nn.Linear(2 * dim_loc + dim_glob, dim_hid_glob))
-        self.fc_glob2 = wn(nn.Linear(dim_hid_glob, dim_hid_glob))
-        self.fc_loc1 = wn(nn.Linear(dim_loc + dim_glob, dim_hid_loc))
+        self.fc_glob1 = wn(nn.Linear(2 * dim_loc + dim_glob, dim_loc))
+        self.fc_glob2 = wn(nn.Linear(dim_loc, dim_hid_glob))
+        self.fc_loc1 = wn(nn.Linear(dim_time + dim_loc + dim_glob, dim_hid_loc))
         self.fc_loc2 = wn(nn.Linear(dim_hid_loc, dim_hid_loc))
 
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x_local, x_global, mask):
+    def forward(self, time, x_local, x_global, mask):
         """Input/Output shapes:
         - x_local: (b, num_points, dim_loc)
         - x_global = [b, dim_glob]
@@ -191,7 +194,7 @@ class EPiCLayer(nn.Module):
         global2local = self._broadcast_global(x_global, local=x_local)
 
         # ...local features
-        local_hidden = torch.cat([x_local, global2local], 2)
+        local_hidden = torch.cat([time, x_local, global2local], 2)
         local_hidden = self.act_fn(self.fc_loc1(local_hidden))
         x_local += self.fc_loc2(local_hidden)  # skip connection
         local_hidden = self.dropout(self.act_fn(x_local))
