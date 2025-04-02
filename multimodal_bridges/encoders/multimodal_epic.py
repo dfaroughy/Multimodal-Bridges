@@ -80,7 +80,8 @@ class MultiModalEPiC(nn.Module):
         dim_out_discrete = config.data.vocab_size * config.data.dim_discrete
 
         num_blocks = config.encoder.num_blocks
-        self.mode_fusion = num_blocks[2] > 0
+        self.mode_fused = num_blocks[2] > 0
+        self.mode_branched = num_blocks[0] > 0
 
         dim_context = (
             config.encoder.dim_emb_time
@@ -88,31 +89,33 @@ class MultiModalEPiC(nn.Module):
             + config.encoder.dim_emb_context_discrete * config.data.dim_context_discrete
         )
 
-        self.continuous_encoder = EPiCEncoder(
-            dim_time=dim_time,
-            dim_input_loc=dim_cont,
-            dim_input_glob=dim_context,
-            dim_output_loc=dim_hid_loc[0],
-            dim_hid_loc=dim_hid_loc[0],
-            dim_hid_glob=dim_hid_glob[0],
-            num_blocks=num_blocks[0],
-            use_skip_connection=config.encoder.skip_connection,
-            dropout=config.encoder.dropout,
-        )
+        if self.mode_branched:
 
-        self.discrete_encoder = EPiCEncoder(
-            dim_time=dim_time,
-            dim_input_loc=dim_disc,
-            dim_input_glob=dim_context,
-            dim_output_loc=dim_hid_loc[1],
-            dim_hid_loc=dim_hid_loc[1],
-            dim_hid_glob=dim_hid_glob[1],
-            num_blocks=num_blocks[1],
-            use_skip_connection=config.encoder.skip_connection,
-            dropout=config.encoder.dropout,
-        )
+            self.continuous_encoder = EPiCEncoder(
+                dim_time=dim_time,
+                dim_input_loc=dim_cont,
+                dim_input_glob=dim_context,
+                dim_output_loc=dim_hid_loc[0],
+                dim_hid_loc=dim_hid_loc[0],
+                dim_hid_glob=dim_hid_glob[0],
+                num_blocks=num_blocks[0],
+                use_skip_connection=config.encoder.skip_connection,
+                dropout=config.encoder.dropout,
+            )
 
-        if self.mode_fusion:
+            self.discrete_encoder = EPiCEncoder(
+                dim_time=dim_time,
+                dim_input_loc=dim_disc,
+                dim_input_glob=dim_context,
+                dim_output_loc=dim_hid_loc[1],
+                dim_hid_loc=dim_hid_loc[1],
+                dim_hid_glob=dim_hid_glob[1],
+                num_blocks=num_blocks[1],
+                use_skip_connection=config.encoder.skip_connection,
+                dropout=config.encoder.dropout,
+            )
+
+        if self.mode_fused:
             self.fused_encoder = EPiCEncoder(
                 dim_time=dim_time,
                 dim_input_loc=dim_hid_loc[0] + dim_hid_loc[1],
@@ -129,10 +132,10 @@ class MultiModalEPiC(nn.Module):
         # ...mode heads:
 
         dim_head_cont = dim_hid_loc[0] + (
-            dim_hid_loc[2] // 2 if self.mode_fusion else 0
+            dim_hid_loc[2] // 2 if self.mode_fused else 0
         )
         dim_head_disc = dim_hid_loc[1] + (
-            dim_hid_loc[2] // 2 if self.mode_fusion else 0
+            dim_hid_loc[2] // 2 if self.mode_fused else 0
         )
 
         self.continuous_head = nn.Sequential(
@@ -159,16 +162,23 @@ class MultiModalEPiC(nn.Module):
         mask = state_local.mask
         t = state_local.time
 
-        # ...legs
+        # ...branches
 
-        h1, g1 = self.continuous_encoder(t, state_local.continuous, global_cat, mask)
-        h2, g2 = self.discrete_encoder(t, state_local.discrete, global_cat, mask)
+        if self.mode_branched:
+            h1, g1 = self.continuous_encoder(t, state_local.continuous, global_cat, mask)
+            h2, g2 = self.discrete_encoder(t, state_local.discrete, global_cat, mask)
+            g = torch.cat([g1, g2, global_cat], dim=-1)
+        else:
+            h1 = state_local.continuous
+            h2 = state_local.discrete
+            g = global_cat
+
 
         # ...fusion
 
-        if self.mode_fusion:
+        if self.mode_fused:
             h = torch.cat([h1, h2], dim=-1)
-            g = torch.cat([g1, g2, global_cat], dim=-1)
+            # g = torch.cat([g1, g2, global_cat], dim=-1)
             fused, _ = self.fused_encoder(t, h, g, mask)
             f1, f2 = torch.tensor_split(fused, 2, dim=-1)
             h_continuous = self.continuous_head(torch.cat([t, f1, h1], dim=-1))
