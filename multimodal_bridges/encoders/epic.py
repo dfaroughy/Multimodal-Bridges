@@ -69,6 +69,11 @@ class EPiCEncoder(nn.Module):
         )
 
     def forward(self, time_local, x_local, x_global, mask=None):
+        """Input shapes:
+         - time_local = (B, D, dim_time_emb)
+         - x_local = (B, D, dim_local)
+         - x_global = (B, dim_global)  
+         """
 
         # ...Projection network:
 
@@ -139,10 +144,11 @@ class EPiCProjection(nn.Module):
 
     def forward(self, time, x_local, x_global, mask):
         """Input shapes:
-         - x_local: (B, D, dim_local)
+         - time_local = (B, D, dim_time_emb)
+         - x_local = (B, D, dim_local)
          - x_global = (B, dim_global)
         Out shapes:
-         - x_local: (B, D, dim_hidden_local)
+         - x_local = (B, D, dim_hidden_local)
          - x_global = (B, dim_hidden_global)
         """
 
