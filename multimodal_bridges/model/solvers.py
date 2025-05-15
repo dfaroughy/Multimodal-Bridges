@@ -38,6 +38,7 @@ class DiscreteSolver:
         self.method = config.model.solver_discrete
         self.vocab_size = config.data.vocab_size
         self.model = model
+        self.topk = config.topk
 
     def fwd_step(self, state, batch, delta_t):
         if state.has_discrete:
@@ -100,8 +101,10 @@ class DiscreteSolver:
             state.discrete[:, :, None],
             (1.0 - delta_p.sum(dim=-1, keepdim=True)).clamp(min=0.0),
         )
-
-        state.discrete = Categorical(delta_p).sample()
+        if self.topk:
+            pass
+        else:
+            state.discrete = Categorical(delta_p).sample()
         state.discrete = state.discrete.unsqueeze(-1)
         return state, rates
 

@@ -83,6 +83,7 @@ class ModelConfig:
     loss_weights: Optional[List[float]] = 'fixed'
     num_timesteps: int = None
     time_eps: float = 0.0
+    topk: int = None
     save_path_history_snapshots: Optional[List[int]] = None
 
 
